@@ -1,0 +1,305 @@
+---
+# MongoDB Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo
+        image: mongo
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+      volumes:
+      - name: mongo-data
+        emptyDir: {}
+---
+# MongoDB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+spec:
+  ports:
+    - port: 27017
+  selector:
+    app: mongo
+  type: ClusterIP
+---
+# Notification Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+      - name: notification-service
+        image: sachith12/notification-service:latest
+        ports:
+        - containerPort: 5006
+        env:
+        - name: PORT
+          value: "5006"
+        - name: TWILIO_ACCOUNT_SID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: TWILIO_ACCOUNT_SID
+        - name: TWILIO_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: TWILIO_AUTH_TOKEN
+        - name: TWILIO_PHONE
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: TWILIO_PHONE
+        - name: EMAIL_FROM
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: EMAIL_FROM
+        - name: EMAIL_PASS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: EMAIL_PASS
+---
+# Notification Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  ports:
+    - port: 5006
+  selector:
+    app: notification-service
+  type: NodePort
+---
+# Payment Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-service
+        image: sachith12/payment-service:latest
+        ports:
+        - containerPort: 5005
+        env:
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: STRIPE_SECRET_KEY
+---
+# Payment Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+spec:
+  ports:
+    - port: 5005
+  selector:
+    app: payment-service
+  type: NodePort
+---
+# Auth Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+      - name: auth-service
+        image: sachith12/auth-service:latest
+        ports:
+        - containerPort: 5001
+        env:
+        - name: MONGO_URI
+          value: mongodb://mongo:27017/authdb
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: JWT_SECRET
+---
+# Auth Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  ports:
+    - port: 5001
+  selector:
+    app: auth-service
+  type: NodePort
+---
+# Restaurant Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restaurant-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: restaurant-service
+  template:
+    metadata:
+      labels:
+        app: restaurant-service
+    spec:
+      containers:
+      - name: restaurant-service
+        image: sachith12/restaurant-service:latest
+        ports:
+        - containerPort: 5002
+---
+# Restaurant Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: restaurant-service
+spec:
+  ports:
+    - port: 5002
+  selector:
+    app: restaurant-service
+  type: NodePort
+---
+# Order Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+      - name: order-service
+        image: sachith12/order-service:latest
+        ports:
+        - containerPort: 5003
+---
+# Order Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  ports:
+    - port: 5003
+  selector:
+    app: order-service
+  type: NodePort
+---
+# Delivery Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: delivery-service
+  template:
+    metadata:
+      labels:
+        app: delivery-service
+    spec:
+      containers:
+      - name: delivery-service
+        image: sachith12/delivery-service:latest
+        ports:
+        - containerPort: 5004
+---
+# Delivery Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: delivery-service
+spec:
+  ports:
+    - port: 5004
+  selector:
+    app: delivery-service
+  type: NodePort
+---
+# ConfigMap (app-config)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    app: config
+data:
+  TWILIO_PHONE: "+1234567890"
+  EMAIL_FROM: "sachithkavishka0001@gmail.com"
+---
+# Secrets (app-secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  labels:
+    app: secrets
+stringData:
+  TWILIO_ACCOUNT_SID: "ACxxxxxxxxxxxxxxxxxxxx"
+  TWILIO_AUTH_TOKEN: "xxxxxxxxxxxxxxxxxxxxxxxx"
+  EMAIL_PASS: "yourappassword"
+  STRIPE_SECRET_KEY: "sk_test_xxxxxxxxxxxxxxxxxxxx"
+  JWT_SECRET: "yourjwtsecret"
+
