@@ -3,21 +3,26 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken, allowRoles } = require('../utils/authMiddleware');
 const paymentController = require('../controllers/paymentController');
+const splitController = require('../controllers/splitController');
 
-// Verify & update (public endpoints nếu bạn muốn)
+// Verify & update
 router.get('/verify-payment/:pi', paymentController.verifyPayment);
 router.post('/update/:pi', paymentController.updatePayment);
 
-// Create Stripe customer for logged-in user
+// Stripe customer
 router.post('/customer', verifyToken, allowRoles('customer'), paymentController.createCustomer);
 
-// Create Payment Intent
+// Payment Intent
 router.post('/create-payment-intent', verifyToken, allowRoles('customer'), paymentController.createPaymentIntent);
 
-// Webhook (không auth; Stripe ký request)
+// Webhook
 router.post('/webhook', paymentController.webhook);
 
-// routes/paymentRoutes.js
+// Methods
 router.get('/payment-methods', verifyToken, allowRoles('customer'), paymentController.listPaymentMethods);
+
+// NEW: Split config for admin
+router.get('/split-config', verifyToken, allowRoles('admin'), splitController.getActive);
+router.post('/split-config', verifyToken, allowRoles('admin'), splitController.upsert);
 
 module.exports = router;

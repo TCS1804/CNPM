@@ -39,7 +39,7 @@ exports.listPaymentMethods = async (req, res) => {
 
 exports.webhook = async (req, res) => {
   try {
-    await paymentService.handleWebhook(req);
+    await paymentService.webhook(req);
     res.sendStatus(200);
   } catch (e) {
     res.sendStatus(400);

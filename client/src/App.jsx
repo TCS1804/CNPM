@@ -4,6 +4,10 @@ import Home from './pages/Home';
 import Login from './pages/login';
 import Register from './pages/registar';
 import RestaurantProfile from './pages/RestaurantProfile';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminSplit from './pages/AdminSplit';
+import AdminRevenue from './pages/AdminRevenue';
+import AdminOrders from './pages/AdminOrders';
 import MenuManagement from './pages/MenuManagement';
 import MenuItemsList from './pages/MenuItemsList';
 import CreateOrder from './pages/CreateOrder';
@@ -24,6 +28,15 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/home" element={<HomeAll />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/split" element={<AdminSplit />} />
+          <Route path="/admin/revenue" element={<AdminRevenue />} />
+          {/* Nếu bạn có các trang dưới đây, thêm vào luôn */}
+          {/* <Route path="/admin/users" element={<AdminUsers />} /> */}
+          <Route path="/admin/orders" element={<AdminOrders />} />
+          {/* <Route path="/admin/restaurants" element={<AdminRestaurants />} /> */}
+          {/* <Route path="/admin/deliveries" element={<AdminDeliveries />} /> */}
+          {/* <Route path="/admin/settings" element={<AdminSettings />} /> */}
           <Route element={<ProtectedLayout />}>
             <Route path="/orders" element={<OrderHistory />} />
           </Route>

@@ -19,6 +19,20 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+// --- ✅ HÀM MỚI: verifyTokenOrInternal ---
+function verifyTokenOrInternal(req, res, next) {
+  const internalSecret = req.get('x-internal-secret');
+  const expectedSecret = process.env.INTERNAL_SECRET;
+
+  // Nếu header có secret hợp lệ → cho qua (đây là request từ payment-service)
+  if (internalSecret && expectedSecret && internalSecret === expectedSecret) {
+    return next();
+  }
+
+  // Ngược lại → yêu cầu xác thực JWT như thường
+  return verifyToken(req, res, next);
+}
+
 const allowRoles = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
@@ -28,4 +42,4 @@ const allowRoles = (...roles) => {
   };
 };
 
-module.exports = { verifyToken, allowRoles };
+module.exports = { verifyToken, verifyTokenOrInternal, allowRoles };

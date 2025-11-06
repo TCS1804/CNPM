@@ -1,9 +1,68 @@
+// payment-service/services/paymentService.js
 const Stripe = require('stripe');
 const Payment = require('../models/Payment');
+const SplitConfig = require('../models/SplitConfig');
+const axios = require('axios');
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const stripe = stripeKey ? new Stripe(stripeKey) : null;
+
+// URL order-service (điền theo môi trường của bạn)
+const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:5030/order';
+
+async function getActiveConfig(restaurantId) {
+  const filter = { active: true };
+  if (restaurantId) filter.restaurantId = restaurantId;
+  return await SplitConfig.findOne(filter).sort({ createdAt: -1 });
+}
+
+// ✅ TÍNH & GỬI SPLIT
+async function applySplitForOrder(orderId, paymentIntentId, amountCents, currency, restaurantId) {
+  // 1) lấy config đang active
+  const cfg = await getActiveConfig(restaurantId);
+
+  // fallback an toàn
+  const method = cfg?.method || 'percent';
+  const percent = cfg?.percent || { admin: 10, restaurant: 85, delivery: 5 };
+  const fixed = cfg?.fixed || { deliveryFee: 0 };
+  const cur = (cfg?.currency || currency || 'USD').toUpperCase();
+
+  // 2) tính số tiền
+  let adminCents = 0, restaurantCents = 0, deliveryCents = 0;
+
+  if (method === 'percent') {
+    adminCents = Math.floor(amountCents * (percent.admin || 0) / 100);
+    deliveryCents = Math.floor(amountCents * (percent.delivery || 0) / 100);
+    // phần còn lại cho restaurant để đảm bảo tổng khớp
+    restaurantCents = amountCents - adminCents - deliveryCents;
+  } else {
+    // fixed: phí ship cố định, phần còn lại chia admin/restaurant theo % mặc định (hoặc 0/100)
+    deliveryCents = Math.min(fixed.deliveryFee || 0, amountCents);
+    const base = amountCents - deliveryCents;
+    const pAdmin = percent.admin ?? 10;
+    adminCents = Math.floor(base * pAdmin / 100);
+    restaurantCents = base - adminCents;
+  }
+
+  // 3) Cập nhật Order (lưu total & shares)
+  await axios.patch(`${ORDER_SERVICE_URL}/${orderId}/split`, {
+    totalCents: amountCents, // ✅ thêm dòng này
+    split: {
+      method,
+      rates: { admin: percent.admin || 0, restaurant: percent.restaurant || 0, delivery: percent.delivery || 0 },
+      amounts: {
+        admin: adminCents,
+        restaurant: restaurantCents,
+        delivery: deliveryCents
+      },
+      currency: (currency || 'usd').toUpperCase(),
+      settledAt: new Date()
+    },
+    paymentIntentId
+  }, {
+    headers: { 'x-internal-secret': process.env.INTERNAL_SECRET || 'dev-secret' }
+  });
+}
 
 exports.createCustomer = async (userId, payload) => {
   if (!stripe) throw new Error('Payment disabled (missing STRIPE_SECRET_KEY)');
@@ -12,71 +71,141 @@ exports.createCustomer = async (userId, payload) => {
 };
 
 exports.verifyPayment = async (pi) => {
-  // nếu có Stripe: lấy trạng thái thật từ Stripe; tạm thời đọc từ DB
   const doc = await Payment.findOne({ paymentIntentId: pi });
-  return { status: doc?.status || 'unknown' };
+  if (!doc) throw new Error('Payment not found');
+  return { status: doc.status };
 };
 
-exports.updatePayment = async (pi, orderId) => {
-  await Payment.findOneAndUpdate({ paymentIntentId: pi }, { orderId }, { upsert: false });
+exports.listPaymentMethods = async (userIdOrCustomerId, stripeCustomerId) => {
+  if (!stripe) return [];
+  const customer = stripeCustomerId || userIdOrCustomerId;
+  if (!customer) return [];
+  const methods = await stripe.paymentMethods.list({ customer, type: 'card' });
+  return methods.data || [];
 };
 
-exports.createPaymentIntent = async (userId, { amount, currency = 'usd', customerId, billingDetails = {}, metadata = {} }) => {
+exports.updatePayment = async (pi, payload) => {
+  // Chuẩn hóa payload để chắc chắn là object
+  let update = {};
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    update = payload;
+  } else if (payload != null) {
+    // Nếu ai đó gửi 'paid' thì hiểu là cập nhật status
+    update = { status: String(payload) };
+  }
+
+  const doc = await Payment.findOneAndUpdate(
+    { paymentIntentId: pi },
+    update,                 // ✅ đưa object phẳng, Mongoose sẽ $set giúp
+    { new: true }
+  );
+  if (!doc) throw new Error('Payment not found');
+  return doc;
+};
+
+exports.createPaymentIntent = async (userId, body) => {
   if (!stripe) throw new Error('Payment disabled (missing STRIPE_SECRET_KEY)');
-  if (!amount || !Number.isFinite(amount)) throw new Error('Missing amount');
-  amount = Math.round(Number(amount)); // integer (cents)
-  if (amount <= 0) throw new Error('Amount must be > 0');
-  
-  // BẮT BUỘC có customerId để phù hợp schema stripeCustomerId
+
+  const { amount, currency = 'VND', customerId, orderId, restaurantId, metadata = {} } = body || {};
+  if (!amount) throw new Error('Missing amount');
   if (!customerId) throw new Error('Missing customerId');
+
+  const intAmount = Math.round(Number(amount));
+  if (intAmount <= 0) throw new Error('Amount must be > 0');
+
   const pi = await stripe.paymentIntents.create({
-    amount,
+    amount: intAmount,
     currency,
     customer: customerId,
     automatic_payment_methods: { enabled: true },
-    metadata 
+    metadata: { ...metadata, orderId, restaurantId }
   });
+
   await Payment.create({
     paymentIntentId: pi.id,
     userId,
-    stripeCustomerId: String(pi.customer || customerId),
-    amount,
+    stripeCustomerId: customerId,
+    amount: intAmount,
     currency,
-    status: pi.status, // ex: 'requires_payment_method'
-    billingName: billingDetails.name,
-    billingEmail: billingDetails.email,
-    billingAddress: billingDetails.address
+    status: pi.status || 'requires_confirmation',
+    orderId,
+    metadata: { orderId, restaurantId }
   });
-  return { clientSecret: pi.client_secret, paymentIntentId: pi.id, customerId: String(pi.customer || customerId) };
+
+  return { clientSecret: pi.client_secret, paymentIntentId: pi.id };
 };
 
-exports.listPaymentMethods = async (customerId) => {
-  if (!stripe) throw new Error('Payment disabled');
-  if (!customerId) throw new Error('Missing customerId');
-  const { data } = await stripe.paymentMethods.list({ customer: customerId, type: 'card' });
-  return data;
-};
-
-exports.handleWebhook = async (req) => {
-  // If server is configured to use raw body for /webhook, you can verify signature here:
-  // const sig = req.headers['stripe-signature'];
-  // const event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
-  // For simplicity (and if you cannot use raw body), treat it as already parsed:
+exports.webhook = async (req) => {
+  // NOTE: ở môi trường thực tế hãy verify chữ ký Stripe
   const event = req.body;
 
   switch (event.type) {
     case 'payment_intent.succeeded': {
       const pi = event.data.object;
-      await Payment.findOneAndUpdate({ paymentIntentId: pi.id }, { status: 'succeeded' });
+
+      const paymentDoc = await Payment.findOneAndUpdate(
+        { paymentIntentId: pi.id },
+        { status: 'succeeded' },
+        { new: true }
+      );
+
+      // ✅ Cập nhật Order status + lưu paymentIntentId (tuỳ API order-service của bạn)
+      if (paymentDoc?.orderId) {
+        try {
+          await axios.patch(`${ORDER_SERVICE_URL}/${paymentDoc.orderId}`, {
+            status: 'paid',
+            paymentIntentId: pi.id
+          });
+        } catch (e) {
+          // log mềm để không chặn webhook
+          console.error('Failed to update order status:', e?.response?.data || e.message);
+        }
+
+        // Split (giữ nguyên logic cũ)
+        const amount = pi.amount_received || pi.amount || paymentDoc.amount;
+        const currency = (pi.currency || paymentDoc.currency || 'VND').toUpperCase();
+        const restaurantId = paymentDoc?.metadata?.restaurantId;
+        await applySplitForOrder(paymentDoc.orderId, pi.id, amount, currency, restaurantId);
+      }
       break;
     }
     case 'payment_intent.payment_failed': {
       const pi = event.data.object;
-      await Payment.findOneAndUpdate({ paymentIntentId: pi.id }, { status: 'requires_payment_method' });
+      await Payment.findOneAndUpdate(
+        { paymentIntentId: pi.id },
+        { status: 'requires_payment_method' }
+      );
       break;
     }
     default:
-      // ignore others
       break;
+  }
+};
+
+exports.handleStripeWebhook = async (event) => {
+  switch (event.type) {
+    case 'payment_intent.succeeded': {
+      const pi = event.data.object; // Stripe PI
+      // cập nhật Payment của bạn nếu có
+      const payDoc = await Payment.findOneAndUpdate(
+        { paymentIntentId: pi.id },
+        { status: 'succeeded' },
+        { new: true }
+      );
+
+      // LẤY orderId & restaurantId từ Payment (hoặc metadata của PI)
+      const orderId = payDoc?.orderId || pi.metadata?.orderId;
+      const restaurantId = payDoc?.restaurantId || pi.metadata?.restaurantId;
+
+      // Tính & gửi split
+      const amountCents = pi.amount_received ?? pi.amount; // integer, cents
+      const currency = (pi.currency || 'usd').toUpperCase();
+
+      if (orderId && amountCents > 0) {
+        await applySplitForOrder(orderId, pi.id, amountCents, currency, restaurantId);
+      }
+      break;
+    }
+    // các case khác giữ nguyên...
   }
 };
