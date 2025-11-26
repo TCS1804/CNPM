@@ -17,7 +17,7 @@ exports.getActive = async (req, res) => {
 
 exports.upsert = async (req, res) => {
   const payload = req.body || {};
-  const { method = 'percent', percent, fixed, currency = 'USD', restaurantId } = payload;
+  const { method = 'percent', percent, fixed, currency = 'VND', restaurantId } = payload;
 
   if (method === 'percent') {
     const p = percent || {};

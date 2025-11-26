@@ -1,4 +1,3 @@
-// payment-service/models/SplitConfig.js
 const mongoose = require('mongoose');
 
 const splitConfigSchema = new mongoose.Schema({
