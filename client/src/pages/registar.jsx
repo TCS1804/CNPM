@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
+import api from "../lib/axios";
 
 export default function Register() {
   const [form, setForm] = useState({ username: "", password: "", role: "customer" });
@@ -16,7 +17,7 @@ export default function Register() {
     setError("");
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:5010/auth/register", form);
+      const res = await api.post("/auth/register", form);
       toast.success(res.data.message);
       setTimeout(() => {
         window.location.href = "/login";

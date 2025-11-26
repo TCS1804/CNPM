@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from "../lib/axios";
 
 const MenuManagement = () => {
   const [menuItem, setMenuItem] = useState({
@@ -60,10 +61,10 @@ const MenuManagement = () => {
       formData.append('price', parseFloat(menuItem.price));
       if (image) formData.append('image', image);
 
-      const response = await axios.post(
-        `http://localhost:5020/restaurant/api/restaurants/${restaurantId}/menu`,
+      const response = await api.post(
+        `/restaurant/api/restaurants/${restaurantId}/menu`,
         formData,
-        { headers: { Authorization: `Bearer ${token}` } } // bỏ Content-Type
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       console.log('Menu item added:', response.data); // Debug: Log response

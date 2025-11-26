@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from "../lib/axios";
+
+const formatCurrency = (value) =>
+  (Number(value) || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
 
 const MenuItemsList = () => {
   const [menuItems, setMenuItems] = useState([]);
@@ -23,8 +29,8 @@ const MenuItemsList = () => {
       // fallback: nếu chưa có thì gọi danh sách id từ BE rồi lấy id đầu tiên
       let id = restaurantId;
       if (!id) {
-        const idsRes = await axios.get(
-          'http://localhost:5020/restaurant/api/restaurants-id',
+        const idsRes = await api.get(
+          "/restaurant/api/restaurants-id",
           { headers: { Authorization: `Bearer ${token}` } }
         );
         id = idsRes.data?.[0]?._id;
@@ -35,10 +41,11 @@ const MenuItemsList = () => {
         setLoading(false);
         return;
       }
-      const response = await axios.get(
-        `http://localhost:5020/restaurant/api/restaurants/${id}/menu`,
+      const response = await api.get(
+        `/restaurant/api/restaurants/${id}/menu`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       
       console.log('Fetched menu items:', response.data); // Debug: Log full response
       response.data.forEach(item => {
@@ -60,7 +67,7 @@ const MenuItemsList = () => {
     
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5020/restaurant/api/menu/${id}`, {
+      await api.delete(`/restaurant/api/menu/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -145,7 +152,7 @@ const MenuItemsList = () => {
                   <h3 className="text-xl font-bold mb-2">{item.name}</h3>
                   <p className="text-gray-400 mb-4">{item.description}</p>
                   <div className="flex justify-between items-center">
-                    <span className="text-yellow-500 font-bold text-xl">${Number(item?.price ?? 0).toFixed(2)}</span>
+                    <span className="text-yellow-500 font-bold text-xl">{formatCurrency(item?.price)}</span>
                     <button
                       onClick={() => handleDelete(item._id)}
                       disabled={deleteLoading === item._id}
