@@ -5,6 +5,10 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+
+FRONTEND_ORIGIN='http://localhost:5173'
+
+
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
   credentials: true

@@ -4,6 +4,10 @@ const router = express.Router();
 const { verifyToken, verifyTokenOrInternal, allowRoles } = require('../utils/authMiddleware');
 const orderController = require('../controllers/orderController');
 const Order = require('../models/Order');
+const Cart = require('../models/Cart');
+const { sendEmail } = require('../services/notificationClient'); // 👈 THÊM
+
+const PLATFORM_CURRENCY = (process.env.PLATFORM_CURRENCY || 'USD').toUpperCase();
 
 // Browse restaurants & menus (via partner service)
 router.get('/restaurants', verifyToken, allowRoles('customer'), orderController.listRestaurants);
@@ -20,11 +24,83 @@ router.get(
 // Order CRUD-ish
 router.post('/create', verifyToken, allowRoles('customer'), orderController.createOrder);
 
+// Customer huỷ đơn
+router.post(
+  '/:orderId/cancel',
+  verifyToken,
+  allowRoles('customer', 'admin'),
+  orderController.cancelOrder
+);
+
 // 🔸 Đổi đường dẫn động để tránh nuốt "/restaurant"
-router.get('/id/:orderId', verifyToken, orderController.getOrder);
+router.get('/id/:orderId', verifyTokenOrInternal, orderController.getOrder);
 router.patch('/id/:orderId/status', verifyToken, allowRoles('restaurant', 'admin'), orderController.updateStatus)
 
 router.get('/customer/orders', verifyToken, allowRoles('customer'), orderController.listByCustomer);
+
+// ================== CART (giỏ hàng) cho customer ==================
+
+// GET /order/cart  → lấy giỏ hàng của user hiện tại
+router.get(
+  '/cart',
+  verifyToken,
+  allowRoles('customer'),
+  async (req, res) => {
+    try {
+      const userId = req.user.id || req.user._id;
+
+      let cart = await Cart.findOne({ userId });
+
+      // Nếu chưa có giỏ hàng thì tạo rỗng cho tiện FE
+      if (!cart) {
+        cart = await Cart.create({ userId, items: [] });
+      }
+
+      res.json(cart);
+    } catch (e) {
+      console.error('GET /order/cart error:', e);
+      res.status(500).json({ message: e.message || 'Failed to get cart' });
+    }
+  }
+);
+
+// PUT /order/cart  → ghi đè toàn bộ items trong giỏ hàng
+router.put(
+  '/cart',
+  verifyToken,
+  allowRoles('customer'),
+  async (req, res) => {
+    try {
+      const userId = req.user.id || req.user._id;
+      const { items } = req.body || {};
+
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ message: 'items must be an array' });
+      }
+
+      // Chuẩn hoá dữ liệu để lưu
+      const normalized = items.map((it) => ({
+        menuItemId: it._id || it.menuItemId || it.menuId || null,
+        restaurantId: it.restaurantId || null,
+        name: it.name,
+        price: Number(it.price || 0),
+        quantity: Number(it.quantity || 1),
+        restaurantName: it.restaurantName || '',
+      }));
+
+      const cart = await Cart.findOneAndUpdate(
+        { userId },
+        { $set: { items: normalized } },
+        { upsert: true, new: true }
+      );
+
+      res.json(cart);
+    } catch (e) {
+      console.error('PUT /order/cart error:', e);
+      res.status(500).json({ message: e.message || 'Failed to update cart' });
+    }
+  }
+);
 
 // === Thêm mới cho delivery-service ===
 router.get(
@@ -46,6 +122,13 @@ router.post(
   verifyToken,
   allowRoles('driver', 'delivery', 'admin'),
   orderController.markDelivered
+);
+
+router.get(
+  '/driver/orders',
+  verifyToken,
+  allowRoles('driver', 'delivery', 'admin'),
+  orderController.listOrdersForDriver
 );
 
 router.get('/', async (req, res) => {
@@ -96,7 +179,7 @@ router.get('/admin/summary', verifyToken, allowRoles('admin'), async (req, res) 
       return acc;
     }, { admin: 0, restaurant: 0, delivery: 0 });
 
-    res.json({ count: orders.length, total, currency: orders[0]?.split?.currency || 'VND' });
+    res.json({ count: orders.length, total, currency: orders[0]?.split?.currency || PLATFORM_CURRENCY });
   } catch (e) {
     res.status(400).json({ message: e.message });
   }
@@ -133,6 +216,57 @@ router.patch('/:id', verifyTokenOrInternal, async (req, res) => {
   const doc = await Order.findByIdAndUpdate(id, update, { new: true });
   if (!doc) return res.status(404).json({ message: 'Order not found' });
   res.json(doc);
+});
+
+router.patch('/internal/:orderId/drone-mission', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { missionId, mode, status } = req.body || {};
+
+    const update = {};
+
+    if (missionId) {
+      update['delivery.missionId'] = String(missionId);
+    }
+
+    if (mode) {
+      update['delivery.mode'] = mode;
+      update.transportMode = mode;
+    }
+
+    if (status) {
+      update.status = status;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    const doc = await Order.findByIdAndUpdate(
+      orderId,
+      { $set: update },
+      { new: true }
+    );
+
+    if (!doc) return res.status(404).json({ message: 'Order not found' });
+
+    // 🔔 Nếu drone báo delivered thì gửi email cho khách
+    if (doc.status === 'delivered' && doc.customerContact?.email) {
+      await sendEmail({
+        to: doc.customerContact.email,
+        subject: `Đơn hàng ${doc._id} đã được drone giao thành công`,
+        text: `Đơn hàng của bạn đã được drone giao tới địa chỉ: ${doc.location?.address || 'không xác định'}.`,
+      });
+    }
+
+    res.json(doc);
+  } catch (e) {
+    console.error(
+      '[order-service] PATCH /internal/:orderId/drone-mission error',
+      e
+    );
+    res.status(400).json({ message: e.message });
+  }
 });
 
 module.exports = router;
