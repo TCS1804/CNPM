@@ -8,6 +8,10 @@ const mongoose = require('mongoose');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log('[payment-service]', req.method, req.url);
+  next();
+});
 
 // ➋ Kết nối Mongo chỉ làm ở đây (đừng connect trong routes)
 mongoose.connect(process.env.MONGO_URI)

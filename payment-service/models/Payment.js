@@ -5,7 +5,7 @@ const paymentSchema = new mongoose.Schema({
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
   userId: { type: String, required: true }, // Renamed from customerId to avoid confusion
   stripeCustomerId: { type: String, required: true },
-  amount: { type: Number, required: true }, // In cents
+  amount: { type: Number, required: true }, 
   currency: { type: String, required: true },
   status: {
     type: String,
