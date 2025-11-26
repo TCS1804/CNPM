@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from "../lib/axios";
+
+const formatCurrency = (value) =>
+  (Number(value) || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
 
 const AllOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -10,7 +16,7 @@ const AllOrders = () => {
     const fetchOrders = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5040/delivery/all', {
+        const response = await api.get('/delivery/all', {
           headers: { Authorization: `Bearer ${token}` }
         });
         console.log('Fetched orders:', response.data); // Debug: Log orders to check statuses
@@ -29,8 +35,8 @@ const AllOrders = () => {
   const handleClaimOrder = async (orderId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(
-        `http://localhost:5040/delivery/order/${orderId}`,
+      const response = await api.patch(
+        `/delivery/order/${orderId}`,
         { status: 'in-transit' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -49,19 +55,24 @@ const AllOrders = () => {
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(
-        `http://localhost:5040/delivery/order/${orderId}`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      console.log('Status update response:', response.data); // Debug: Log response
+      const headers = { Authorization: `Bearer ${token}` };
 
-      setOrders(orders.map(order =>
-        order._id === orderId ? { ...order, status: newStatus } : order
-      ));
+      if (newStatus === 'delivered') {
+        // Mark as delivered -> gọi API complete
+        await api.post(`/delivery/orders/${orderId}/complete`, {}, { headers });
+      } else if (newStatus === 'in-transit' || newStatus === 'accepted') {
+        // Nhận/nhấc đơn -> gọi API assign (BE sẽ đẩy trạng thái sang 'in-transit')
+        await api.post(`/delivery/orders/${orderId}/accept`, {}, { headers });
+      } else {
+        // Các trạng thái khác hiện không có API riêng
+        throw new Error('Unsupported status update flow');
+      }
+
+      // Cập nhật UI lạc quan
+      setOrders(orders.map(o => o._id === orderId ? { ...o, status: newStatus } : o));
       setError('');
     } catch (err) {
-      console.error('Error updating status:', err.message);
+      console.error('Error updating status:', err?.response?.data || err.message);
       setError('Failed to update order status');
     }
   };
@@ -138,13 +149,28 @@ const AllOrders = () => {
                     order.items.map((item, index) => (
                       <div key={index} className="flex justify-between">
                         <span>{item.quantity}x {item.name}</span>
-                        <span>${(item.price * item.quantity).toFixed(2)}</span>
+                        <span>{formatCurrency(item.price * item.quantity)}</span>
                       </div>
                     ))
                   ) : (
                     <p className="text-gray-400">No items available</p>
                   )}
                 </div>
+                
+                {order.customerContact && (
+                  <div className="bg-gray-800 p-4 rounded-lg mb-4">
+                    <h4 className="font-medium text-yellow-500 mb-2">Khách hàng</h4>
+                    <p className="text-gray-200">
+                      {order.customerContact.fullName || 'Khách hàng'}{" "}
+                      {order.customerContact.phone && `– ${order.customerContact.phone}`}
+                    </p>
+                    {order.customerContact.address && (
+                      <p className="text-gray-400 text-sm mt-1">
+                        Địa chỉ: {order.customerContact.address}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="border-t border-gray-800 pt-4 flex justify-between items-center">
                   <div className="space-x-2">
@@ -172,7 +198,7 @@ const AllOrders = () => {
                   </div>
                   <div className="font-bold">
                     <span>Total: </span>
-                    <span className="text-yellow-500">${order.total ? order.total.toFixed(2) : '0.00'}</span>
+                    <span className="text-yellow-500">{formatCurrency(order.total || 0)}</span>
                   </div>
                 </div>
               </div>

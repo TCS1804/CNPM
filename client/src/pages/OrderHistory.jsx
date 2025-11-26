@@ -1,25 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from "../lib/axios";
+import DroneSimulationMap from "../component/DroneSimulationMap";
+
+const formatCurrency = (value) =>
+  (Number(value) || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
 
 const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [restaurants, setRestaurants] = useState([]);
+  const [droneOrder, setDroneOrder] = useState(null);
+  const [role, setRole] = useState('customer');
+
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        const res = await api.get("/restaurant/api/restaurants");
+        const arr = Array.isArray(res.data) ? res.data : [];
+        setRestaurants(arr);
+      } catch (e) {
+        console.error("Failed to fetch restaurants for drone map:", e.response?.data || e.message);
+      }
+    };
+    fetchRestaurants();
+  }, []);
 
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
+        const rawUser = localStorage.getItem('user');
+        const user = rawUser ? JSON.parse(rawUser) : null;
+        const userRole = user?.role || 'customer';
+        setRole(userRole);
 
-        let endpoint = '/order/customer/orders';
-        if (user === 'restaurant') {
-          endpoint = '/order/restaurant';
-        } else if (user === 'delivery') {
-          endpoint = '/order/delivery';
-        }
+        let endpoint = '/orders/customer/orders';
+        if (userRole === 'restaurant') endpoint = '/orders/restaurant';
+        if (userRole === 'delivery')   endpoint = '/orders/available';
 
-        const response = await axios.get(`http://localhost:5030${endpoint}`, {
+        // dùng api client, không hard-code http://localhost:5020/api
+        const response = await api.get(endpoint, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -40,6 +64,29 @@ const OrderHistory = () => {
 
     fetchOrders();
   }, []);
+
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Bạn chắc chắn muốn huỷ đơn này?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await api.post(
+        `/orders/${orderId}/cancel`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // update UI
+      setOrders((prev) =>
+        prev.map((o) =>
+          o._id === orderId ? { ...o, status: 'cancelled' } : o
+        )
+      );
+    } catch (err) {
+      console.error('Cancel order error:', err.response?.data || err.message);
+      setError(err.response?.data?.message || 'Failed to cancel order');
+    }
+  };
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
@@ -107,19 +154,105 @@ const OrderHistory = () => {
                   {order.items.map((item, index) => (
                     <div key={index} className="flex justify-between">
                       <span>{item.quantity}x {item.name}</span>
-                      <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      <span>{formatCurrency(item.price * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="border-t border-gray-800 pt-4 flex justify-between items-center font-bold">
-                  <span>Total</span>
-                  <span className="text-yellow-500">${order.total.toFixed(2)}</span>
+                <div className="mt-4 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Items total</span>
+                    <span>{formatCurrency(order.itemsTotal ?? (order.total - (order.shippingFee || 0)))}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Shipping fee</span>
+                    <span>{formatCurrency(order.shippingFee || 0)}</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-800 pt-4 flex justify-between items-center">
+                  <div className="font-bold">
+                    <span>Total: </span>
+                    <span className="text-yellow-500">
+                      {formatCurrency(order.total || 0)}
+                    </span>
+                  </div>
+
+                  {order.transportMode === 'drone' &&
+                    ['accepted', 'in-transit', 'delivered'].includes(
+                      (order.status || '').toLowerCase()
+                    ) &&
+                    order.location?.coordinates &&
+                    (() => {
+                      const restaurant = restaurants.find(r => r._id === order.restaurantId);
+                      const restaurantCoords = restaurant?.location?.coordinates;
+                      const customerCoords = order.location?.coordinates;
+                      if (!restaurantCoords || !customerCoords) return null;
+
+                      return (
+                        <button
+                          onClick={() =>
+                            setDroneOrder({
+                              order,
+                              restaurantCoords,
+                              customerCoords,
+                            })
+                          }
+                          className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700"
+                        >
+                          Xem drone
+                        </button>
+                      );
+                    })()}
+                </div>
+
+                <div className="mt-4 border-t border-gray-800 pt-3 text-sm space-y-1">
+                  {order.customerContact && (
+                    <div>
+                      <span className="font-semibold">Thông tin của bạn: </span>
+                      {order.customerContact.fullName || 'Không có tên'}{" "}
+                      {order.customerContact.phone && `– ${order.customerContact.phone}`}
+                      {order.customerContact.address && (
+                        <div className="text-xs text-gray-400">
+                          Địa chỉ giao: {order.customerContact.address}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {order.deliveryContact && (
+                    <div>
+                      <span className="font-semibold">Người giao: </span>
+                      {order.deliveryContact.fullName || 'Shipper'}{" "}
+                      {order.deliveryContact.phone && `– ${order.deliveryContact.phone}`}
+                    </div>
+                  )}
+
+                  {role === 'customer' &&
+                    ['pending', 'accepted'].includes(order.status) && (
+                      <div className="pt-2">
+                        <button
+                          onClick={() => handleCancelOrder(order._id)}
+                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Huỷ đơn
+                        </button>
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+      {droneOrder && (
+          <DroneSimulationMap
+            isOpen={!!droneOrder}
+            onClose={() => setDroneOrder(null)}
+            orderId={droneOrder.order._id}
+            restaurantCoords={droneOrder.restaurantCoords}
+            customerCoords={droneOrder.customerCoords}
+          />
       )}
     </div>
   );

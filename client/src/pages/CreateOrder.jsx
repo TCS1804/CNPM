@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { CartContext } from '../CartContext';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
+import api from "../lib/axios";
+import MapPicker from '../component/MapPicker';
+import AddressPicker from '../component/AddressPicker';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const ORDER_BASE = import.meta.env.VITE_ORDER_BASE_URL || '/orders';
+const PAYMENT_BASE = import.meta.env.VITE_PAYMENT_BASE_URL || '/payments';
+
+const formatCurrency = (value) =>
+  (Number(value) || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
 
 function normalizeEmail(s) {
   return String(s || "").trim().replace(/\.+$/, "");
@@ -101,7 +111,7 @@ const CheckoutForm = ({ onSuccess, onError, setLoading, selectedPaymentMethod, b
 
 const CreateOrder = () => {
   const [customerId, setCustomerId] = useState('');
-  const { cart, addToCart, removeFromCart, clearCart } = useContext(CartContext);
+  const { cart, addToCart, removeFromCart, deleteFromCart, clearCart } = useContext(CartContext);
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState('');
   const [menuItems, setMenuItems] = useState([]);
@@ -109,7 +119,9 @@ const CreateOrder = () => {
   const [error, setError] = useState('');
   const [deliveryLocation, setDeliveryLocation] = useState(null);
   const [address, setAddress] = useState('');
-  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [itemsTotal, setItemsTotal] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [orderData, setOrderData] = useState(null);
   const [clientSecret, setClientSecret] = useState('');
@@ -118,10 +130,17 @@ const CreateOrder = () => {
   const [billingDetails, setBillingDetails] = useState({
     name: '',
     email: '',
-    address: { line1: '', city: '', state: '', postal_code: '', country: 'US' }
+    address: { line1: '', city: '', state: '', postal_code: '', country: 'VN' }
   });
+  const [transportMode, setTransportMode] = useState('human');
   const debouncedEmail = useDebouncedValue(billingDetails.email, 600);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [customerContact, setCustomerContact] = useState({
+    fullName: "",
+    phone: "",
+    email: "",
+    address: "",
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -132,18 +151,76 @@ const CreateOrder = () => {
     const fetchRestaurants = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5030/order/restaurants', {
+        const response = await api.get(`${ORDER_BASE}/restaurants`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (import.meta.env.DEV) console.log('GET /order/restaurants ok', response.data?.length);
         console.log('Fetched restaurants:', response.data);
         setRestaurants(response.data);
       } catch (err) {
+        console.error('Payment initialization error:', err.response?.data || err.message);
         setError('Failed to fetch restaurants');
-        console.error('Restaurant fetch error:', err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchRestaurants();
+  }, []);
+
+  // 🔹 NEW: Prefill thông tin từ CustomerProfile
+  useEffect(() => {
+    const fetchCustomerProfileForOrder = async () => {
+      try {
+        const { data } = await api.get('/auth/profile/customer/me');
+
+        if (!data) return;
+
+        // Prefill tên & email nếu đang để trống
+        setBillingDetails(prev => ({
+          ...prev,
+          name: prev.name || data.fullName || '',
+          email: prev.email || data.email || '',
+          address: {
+            ...prev.address,
+            line1: prev.address.line1 || data.address || ''
+          }
+        }));
+
+        // Prefill address input
+        if (!address && data.address) {
+          setAddress(data.address);
+        }
+
+        // Lấy lat/lng từ profile (tuỳ bạn lưu dạng nào)
+        const lat =
+          typeof data.location?.lat === 'number'
+            ? data.location.lat
+            : data.location?.coordinates?.lat;
+        const lng =
+          typeof data.location?.lng === 'number'
+            ? data.location.lng
+            : data.location?.coordinates?.lng;
+
+        if (
+          typeof lat === 'number' &&
+          typeof lng === 'number' &&
+          !deliveryLocation
+        ) {
+          setDeliveryLocation({
+            latitude: lat,
+            longitude: lng,
+            address: data.address || ''
+          });
+        }
+      } catch (e) {
+        console.error(
+          'Fetch customer profile for CreateOrder failed',
+          e.response?.data || e.message
+        );
+      }
+    };
+
+    fetchCustomerProfileForOrder();
   }, []);
 
   useEffect(() => {
@@ -157,8 +234,8 @@ const CreateOrder = () => {
         if (!email || !EMAIL_RE.test(email) || !name) return;
 
         console.log('Fetching payment methods with:', { email, name });
-        const { data } = await axios.post(
-          'http://localhost:5080/payment/customer',
+        const { data } = await api.post(
+          `${PAYMENT_BASE}/customer`,
           { email, name },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -166,8 +243,8 @@ const CreateOrder = () => {
         setCustomerId(cid);
         
         // (tuỳ chọn) gọi API để liệt kê thẻ đã lưu
-        const pmRes = await axios.get(
-          'http://localhost:5080/payment/payment-methods',
+        const pmRes = await api.get(
+          `${PAYMENT_BASE}/payment-methods`,
           { params: { customerId: cid }, headers: { Authorization: `Bearer ${token}` } }
         );
         const methods = pmRes.data?.paymentMethods || [];
@@ -193,7 +270,7 @@ const CreateOrder = () => {
     const fetchMenuItems = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`http://localhost:5030/order/restaurant/${selectedRestaurant}/menu`, {
+        const response = await api.get(`${ORDER_BASE}/restaurant/${selectedRestaurant}/menu`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         console.log('Fetched menu items:', response.data);
@@ -206,70 +283,87 @@ const CreateOrder = () => {
     fetchMenuItems();
   }, [selectedRestaurant]);
 
-  const calculateTotal = () => {
+  // Tự động tính tổng tiền món mỗi khi giỏ hàng hoặc nhà hàng thay đổi
+  useEffect(() => {
+    const sum = calculateItemsTotal();
+    setItemsTotal(sum);
+  }, [cart, selectedRestaurant]);
+
+  // Tự động tính tiền ship mỗi khi vị trí giao hàng hoặc nhà hàng / danh sách nhà hàng thay đổi
+  useEffect(() => {
+    const fee = calculateShippingFee();
+    setShippingFee(fee);
+  }, [deliveryLocation, selectedRestaurant, restaurants]);
+
+  const calculateItemsTotal = () => {
     const displayedCartItems = selectedRestaurant
       ? cart.filter(item => item.restaurantId === selectedRestaurant)
       : cart;
-    return displayedCartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+    const sum = displayedCartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+    return sum;
   };
 
-  const getCurrentLocation = () => {
-    setLoadingLocation(true);
-    setError('');
-
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      setLoadingLocation(false);
-      return;
+  const handleClearCartClick = () => {
+    if (window.confirm('Bạn có chắc chắn muốn xoá hết giỏ hàng không?')) {
+      clearCart();
     }
+  };
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const coords = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude
-        };
-        setDeliveryLocation(coords);
+  // Shipping fee in USD
+  const calculateShippingFee = () => {
+    if (!deliveryLocation || !selectedRestaurant) return 0;
 
-        try {
-          const response = await axios.get(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
-          );
+    const restaurant = restaurants.find(r => r._id === selectedRestaurant);
+    const coords = restaurant?.location?.coordinates || restaurant?.location;
+    if (!coords?.lat || !coords?.lng) return 0;
 
-          if (response.data.results && response.data.results.length > 0) {
-            setAddress(response.data.results[0].formatted_address);
-            setBillingDetails(prev => ({
-              ...prev,
-              address: {
-                ...prev.address,
-                line1: response.data.results[0].formatted_address
-              }
-            }));
-          } else {
-            setAddress('Address not found');
-          }
-        } catch (err) {
-          console.error('Geocoding error:', err);
-          setAddress('Failed to get address');
-        }
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371; // km
 
-        setLoadingLocation(false);
-      },
-      (error) => {
-        setError(`Failed to get location: ${error.message}`);
-        setLoadingLocation(false);
+    const dLat = toRad(deliveryLocation.latitude - coords.lat);
+    const dLng = toRad(deliveryLocation.longitude - coords.lng);
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(coords.lat)) *
+        Math.cos(toRad(deliveryLocation.latitude)) *
+        Math.sin(dLng / 2) ** 2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distanceKm = R * c;
+
+    // Base: $2 + $0.5 / km
+    const baseFee = 2;       // USD
+    const feePerKm = 0.5;    // USD per km
+
+    const rawFee = baseFee + distanceKm * feePerKm;
+
+    // Round to 2 decimals (cents)
+    return Number(rawFee.toFixed(2));
+  };
+
+  const openMapPicker = () => {
+    setError('');
+    setIsMapOpen(true);
+  };
+
+  const handleConfirmLocationFromMap = ({ lat, lng, address }) => {
+    const coords = { latitude: lat, longitude: lng, address };
+    setDeliveryLocation(coords);
+    setAddress(address);
+    setBillingDetails(prev => ({
+      ...prev,
+      address: {
+        ...prev.address,
+        line1: address
       }
-    );
+    }));
+    setIsMapOpen(false);
   };
 
   const initiatePayment = async () => {
     if (cart.length === 0 || !selectedRestaurant) {
       setError('Cart is empty or no restaurant selected');
-      return;
-    }
-
-    if (!deliveryLocation) {
-      setError('Please provide your delivery location');
       return;
     }
 
@@ -279,41 +373,56 @@ const CreateOrder = () => {
       return;
     }
 
-    const orderItems = cart.filter(item => item.restaurantId === selectedRestaurant);
-    if (orderItems.length === 0) {
-      setError('No items from the selected restaurant in the cart');
-      return;
-    }
+    const itemsTotalLocal = itemsTotal;
+    const shippingFeeLocal = shippingFee;
+    const grandTotal = Number((itemsTotalLocal + shippingFeeLocal).toFixed(2));
+
+    const displayedCartItems = selectedRestaurant
+      ? cart.filter(item => item.restaurantId === selectedRestaurant)
+      : cart;
 
     const newOrderData = {
       restaurantId: selectedRestaurant,
-      items: orderItems.map(item => ({
-        _id: item._id,
+      items: displayedCartItems.map((item) => ({
         name: item.name,
         price: item.price,
-        quantity: item.quantity
+        quantity: item.quantity,
       })),
-      total: calculateTotal(),
-      deliveryLocation
+      itemsTotal: itemsTotalLocal,
+      shippingFee: shippingFeeLocal,
+      total: grandTotal,
+      deliveryLocation,
+      transportMode,
+      customerContact: {
+        fullName: customerContact.fullName || billingDetails.name,
+        email: customerContact.email || normalizedEmail,
+        phone: customerContact.phone || "",
+        address:
+          (deliveryLocation && deliveryLocation.address) ||
+          customerContact.address ||
+          address,
+      },
     };
 
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        'http://localhost:5080/payment/create-payment-intent',
+      const response = await api.post(
+        `${PAYMENT_BASE}/create-payment-intent`,
         {
-          amount: Math.round(Number(newOrderData.total) * 100), // cents, integer
+          amount: grandTotal, // cents
           currency: 'usd',
           customerId,
+          restaurantId: newOrderData.restaurantId,
           metadata: { restaurantId: newOrderData.restaurantId },
           billingDetails: {
             ...billingDetails,
-            email: normalizedEmail
+            email: normalizedEmail,
           }
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       setClientSecret(response.data.clientSecret);
       setOrderData(newOrderData);
       setShowPaymentModal(true);
@@ -330,16 +439,22 @@ const CreateOrder = () => {
   setError('');
   try {
     const token = localStorage.getItem('token');
-    const orderResponse = await axios.post(
-      'http://localhost:5030/order/create',
+    const orderResponse = await api.post(
+      `${ORDER_BASE}/create`,
       {
         restaurantId: orderData.restaurantId,
         items: orderData.items,
         deliveryLocation: orderData.deliveryLocation,
-        paymentIntentId
+        itemsTotal: orderData.itemsTotal,
+        shippingFee: orderData.shippingFee,
+        total: orderData.total,
+        paymentIntentId,
+        transportMode: orderData.transportMode,
+        customerContact: orderData.customerContact,
       },
       { headers: { Authorization: `Bearer ${token}` } }
     );
+
 
    // Lấy orderId an toàn theo nhiều khả năng khác nhau
    const resp = orderResponse?.data ?? {};
@@ -357,8 +472,8 @@ const CreateOrder = () => {
      return;
    }
 
-   await axios.post(
-     `http://localhost:5080/payment/update/${paymentIntentId}`,
+   await api.post(
+     `${PAYMENT_BASE}/update/${paymentIntentId}`,
      { orderId },
      { headers: { Authorization: `Bearer ${token}` } }
    );
@@ -437,7 +552,7 @@ const CreateOrder = () => {
                       <div>
                         <h4 className="font-bold">{item.name}</h4>
                         <p className="text-gray-400 text-sm">{item.description}</p>
-                        <p className="text-yellow-500 mt-2">${item.price.toFixed(2)}</p>
+                        <p className="text-yellow-500 mt-2">{formatCurrency(item.price)}</p>
                       </div>
                       <button
                         onClick={() => addToCart(item)}
@@ -461,37 +576,76 @@ const CreateOrder = () => {
           <h3 className="text-xl font-bold mb-4">Delivery Location</h3>
           <div className="flex flex-col md:flex-row items-start gap-4">
             <div className="flex-1 w-full">
-              <label className="block text-gray-400 mb-2">Delivery Address</label>
-              <input
-                type="text"
+              <AddressPicker
                 value={address}
-                onChange={(e) => {
-                  setAddress(e.target.value);
+                onChangeAddress={(addr) => {
+                  setAddress(addr);
+                  setCustomerContact(prev => ({ ...prev, address: addr }));
                   setBillingDetails(prev => ({
                     ...prev,
-                    address: { ...prev.address, line1: e.target.value }
+                    address: { ...prev.address, line1: addr }
                   }));
                 }}
-                placeholder="Enter your delivery address"
-                className="w-full px-4 py-3 rounded bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                onChangeCoords={({ lat, lng, label }) => {
+                  const addr = label || address;
+                  setDeliveryLocation({
+                    latitude: lat,
+                    longitude: lng,
+                    address: addr,
+                  });
+                  if (addr) {
+                    setCustomerContact(prev => ({ ...prev, address: addr }));
+                  }
+                }}
               />
             </div>
+
             <button
-              onClick={getCurrentLocation}
-              disabled={loadingLocation}
-              className={`px-4 py-3 mt-4 md:mt-8 rounded bg-blue-600 text-white hover:bg-blue-700 ${loadingLocation ? 'opacity-70 cursor-not-allowed' : ''}`}
+              onClick={openMapPicker}
+              className="px-4 py-3 mt-4 md:mt-8 rounded bg-blue-600 text-white hover:bg-blue-700"
             >
-              {loadingLocation ? 'Getting location...' : 'Use Current Location'}
+              Use Current Location
             </button>
           </div>
+
           {deliveryLocation && (
             <div className="mt-4">
               <p className="text-green-500">✓ Location captured</p>
-              <p className="text-sm text-gray-400">Lat: {deliveryLocation.latitude.toFixed(6)}, Lng: {deliveryLocation.longitude.toFixed(6)}</p>
+              <p className="text-sm text-gray-400">
+                Lat: {deliveryLocation.latitude.toFixed(6)}, Lng:{" "}
+                {deliveryLocation.longitude.toFixed(6)}
+              </p>
             </div>
           )}
         </div>
 
+        {/* Chọn phương thức giao hàng */}
+        <div className="mb-4">
+          <label className="block text-gray-400 mb-2">Phương thức giao hàng</label>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <label className="flex items-center gap-2 text-gray-200">
+              <input
+                type="radio"
+                name="transportMode"
+                value="human"
+                checked={transportMode === 'human'}
+                onChange={() => setTransportMode('human')}
+              />
+              <span>Tài xế (delivery driver)</span>
+            </label>
+            <label className="flex items-center gap-2 text-gray-200">
+              <input
+                type="radio"
+                name="transportMode"
+                value="drone"
+                checked={transportMode === 'drone'}
+                onChange={() => setTransportMode('drone')}
+              />
+              <span>Drone tự động</span>
+            </label>
+          </div>
+        </div>
+          
         <div className="mt-8 bg-gray-900 rounded-lg shadow-lg p-6">
           <h3 className="text-xl font-bold mb-4">Billing Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -579,36 +733,78 @@ const CreateOrder = () => {
                   No items in the cart match the selected restaurant. Please add items from this restaurant or change the selection.
                 </p>
               ) : (
-                <div className="mb-6">
-                  {displayedCartItems.map(item => (
-                    <div key={item._id} className="flex justify-between items-center py-2 border-b border-gray-800">
-                      <div className="flex-1">
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-gray-400">${item.price.toFixed(2)} x {item.quantity}</p>
-                        <p className="text-sm text-gray-400">Restaurant: {item.restaurantName}</p>
+                <>
+                  <div className="mb-6">
+                    {displayedCartItems.map(item => (
+                      <div
+                        key={item.menuItemId || item._id}
+                        className="flex justify-between items-center py-2 border-b border-gray-800"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-sm text-gray-400">
+                            {formatCurrency(item.price)} x {item.quantity}
+                          </p>
+                          <p className="text-sm text-gray-400">
+                            Restaurant: {item.restaurantName}
+                          </p>
+                        </div>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => removeFromCart(item.menuItemId || item._id)}
+                            className="bg-gray-800 text-white px-3 py-1 rounded mr-2 hover:bg-gray-700"
+                          >
+                            -
+                          </button>
+                          <span className="mx-2">{item.quantity}</span>
+                          <button
+                            onClick={() => addToCart(item)}
+                            className="bg-gray-800 text-white px-3 py-1 rounded ml-2 hover:bg-gray-700"
+                          >
+                            +
+                          </button>
+                          <button
+                            onClick={() => deleteFromCart(item.menuItemId || item._id)}
+                            className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+                          >
+                            Xoá
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center">
-                        <button
-                          onClick={() => removeFromCart(item._id)}
-                          className="bg-gray-800 text-white px-3 py-1 rounded mr-2 hover:bg-gray-700"
-                        >
-                          -
-                        </button>
-                        <span className="mx-2">{item.quantity}</span>
-                        <button
-                          onClick={() => addToCart(item)}
-                          className="bg-gray-800 text-white px-3 py-1 rounded ml-2 hover:bg-gray-700"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end mb-6">
+                    <button
+                      onClick={handleClearCartClick}
+                      className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 text-white text-sm"
+                    >
+                      Xoá hết giỏ hàng
+                    </button>
+                  </div>
+                </>
               )}
+
+              <div className="space-y-1 mb-6 text-sm">
+                <div className="flex justify-between">
+                  <span>Items total</span>
+                  <span>{formatCurrency(itemsTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Shipping fee</span>
+                  <span>
+                    {deliveryLocation
+                      ? formatCurrency(shippingFee)
+                      : 'Select or type delivery location'}
+                  </span>
+                </div>
+              </div>
+
               <div className="flex justify-between items-center font-bold text-lg mb-6">
-                <span>Total:</span>
-                <span className="text-yellow-500">${calculateTotal().toFixed(2)}</span>
+                <span>Total</span>
+                <span className="text-yellow-500">
+                  {formatCurrency(itemsTotal + (deliveryLocation ? shippingFee : 0))}
+                </span>
               </div>
                   <div className="mb-4">
                     <label className="block text-gray-400 mb-2">Payment Method</label>
@@ -636,19 +832,15 @@ const CreateOrder = () => {
                 disabled={
                   loading ||
                   displayedCartItems.length === 0 ||
-                  !deliveryLocation ||
                   !customerId ||
                   !billingDetails.name?.trim() ||
                   !EMAIL_RE.test(normalizeEmail(billingDetails.email)) ||
                   !billingDetails.address?.line1?.trim()
                 }
-                className={`w-full py-3 px-4 rounded font-medium bg-yellow-500 text-black hover:bg-yellow-600 transition duration-200 ${loading || displayedCartItems.length === 0 || !deliveryLocation ? 'opacity-70 cursor-not-allowed' : ''}`}
+                className={`w-full py-3 px-4 rounded font-medium bg-yellow-500 text-black hover:bg-yellow-600 transition duration-200 ${loading || displayedCartItems.length === 0 ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 {loading ? 'Processing...' : 'Proceed to Payment'}
               </button>
-              {!deliveryLocation && displayedCartItems.length > 0 && (
-                <p className="text-yellow-500 text-sm mt-2">Please provide your delivery location to proceed.</p>
-              )}
             </>
           ) : (
             <p className="text-gray-400">Your cart is empty. Add items from the menu to place an order.</p>
@@ -682,6 +874,17 @@ const CreateOrder = () => {
       <footer className="bg-gray-900 text-white text-center py-4">
         <p>© {new Date().getFullYear()} Eatzaa. All rights reserved.</p>
       </footer>
+      <MapPicker
+        isOpen={isMapOpen}
+        onClose={() => setIsMapOpen(false)}
+        onConfirm={handleConfirmLocationFromMap}
+        initialLocation={
+          deliveryLocation
+            ? { lat: deliveryLocation.latitude, lng: deliveryLocation.longitude }
+            : null
+        }
+      />
+
     </div>
   );
 };
