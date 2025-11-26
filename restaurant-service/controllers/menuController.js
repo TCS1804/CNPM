@@ -1,5 +1,6 @@
 const menuService = require('../services/menuService');
 const path = require('path');
+const cloudinary = require("../config/cloudinary");
 
 exports.getByRestaurant = async (req, res) => {
   try {
@@ -28,11 +29,13 @@ exports.addItem = async (req, res) => {
     let imageUrl = '';
     if (req.files?.image) {
       const file = req.files.image;
-      const filename = `${Date.now()}_${file.name}`;
-      await file.mv(path.join(__dirname, '..', 'uploads', filename));
 
-      const base = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
-      imageUrl = `${base}/uploads/${filename}`; // <-- URL tuyệt đối
+      // Upload lên Cloudinary
+      const result = await cloudinary.uploader.upload(file.tempFilePath || file.tempFilePathLocal || file.path, {
+        folder: "fastfood_menu",
+      });
+
+      imageUrl = result.secure_url;  // <-- LƯU URL TRỰC TIẾP CỦA CLOUDINARY
     }
 
     const item = await menuService.addItem(id, { name, description, price, imageUrl });

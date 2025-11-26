@@ -23,8 +23,11 @@ exports.create = async (req, res) => {
     // đảm bảo có owner lấy từ token
     const payload = {
       name: (req.body.name || '').trim(),
-      owner: req.user?.id,             // <-- thêm dòng này
+      owner: req.user?.id,
+      address: (req.body.address || '').trim(),
+      location: req.body.location || {}
     };
+
     if (!payload.name) throw new Error('name is required');
     if (!payload.owner) throw new Error('owner is required');
     const doc = await restaurantService.create(payload);
