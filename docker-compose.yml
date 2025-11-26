@@ -3,7 +3,7 @@ services:
     image: mongo:6
     container_name: mongo
     ports:
-      - "27017:27017"       
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
@@ -15,8 +15,6 @@ services:
       - ./auth-service/.env
     depends_on:
       - mongo
-    ports:
-      - "5010:5001"
     restart: unless-stopped
 
   restaurant-service:
@@ -26,8 +24,6 @@ services:
       - ./restaurant-service/.env
     depends_on:
       - mongo
-    ports:
-      - "5020:5002"
     restart: unless-stopped
 
   order-service:
@@ -39,8 +35,6 @@ services:
       - mongo
       - restaurant-service
       - auth-service
-    ports:
-      - "5030:5003"
     restart: unless-stopped
 
   delivery-service:
@@ -52,8 +46,6 @@ services:
       - mongo
       - order-service
       - auth-service
-    ports:
-      - "5040:5004"
     restart: unless-stopped
 
   payment-service:
@@ -63,8 +55,6 @@ services:
       - ./payment-service/.env
     depends_on:
       - mongo
-    ports:
-      - "5080:5008"
     restart: unless-stopped
 
   notification-service:
@@ -74,8 +64,32 @@ services:
       - ./notification-service/.env
     depends_on:
       - mongo
+    restart: unless-stopped
+
+  drone-service:
+    build: ./drone-service
+    container_name: drone-service
+    env_file:
+      - ./drone-service/.env
     ports:
-      - "5060:5006"
+      - "5055:5055"
+    restart: unless-stopped
+
+  # ✅ Thêm API Gateway (giữ cổng 5020 cho gateway)
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    env_file:
+      - ./api-gateway/.env
+    depends_on:
+      - auth-service
+      - restaurant-service
+      - order-service
+      - delivery-service
+      - notification-service
+      - payment-service
+    ports:
+      - "5020:5020"   # <-- THÊM DÒNG NÀY
     restart: unless-stopped
 
   # (Tuỳ chọn) GUI xem DB
@@ -86,8 +100,14 @@ services:
       - mongo
     ports:
       - "8081:8081"
+    # 🔧 Khuyến nghị: nếu muốn xem Mongo container cục bộ, dùng cấu hình dưới
+    # (nếu bạn vẫn muốn dùng Atlas thì giữ nguyên ME_CONFIG_MONGODB_URL như cũ)
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb+srv://fast_food:fast_food@cluster0.2rwrcud.mongodb.net/?appName=Cluster0
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      # ME_CONFIG_MONGODB_URL: mongodb+srv://fast_food:fast_food@cluster0.2rwrcud.mongodb.net/?appName=Cluster0
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
     restart: unless-stopped
 
 volumes:
