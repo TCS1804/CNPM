@@ -1,5 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from "../lib/axios";
+
+const fmt = (v) =>
+  `${(Number(v || 0)).toLocaleString('en-US')} $`;
+
+const getBaseAmount = (order) => {
+  if (typeof order?.total === 'number') return order.total;
+  if (typeof order?.totalCents === 'number') return order.totalCents / 100;
+  return 0;
+};
+
+const getShare = (order, key) => {
+  const amounts = order?.split?.amounts || {};
+  const rates = order?.split?.rates || {};
+  const base = getBaseAmount(order);
+
+  const cents = amounts[key];
+  if (typeof cents === 'number') return cents / 100;
+
+  const rate = rates[key] || 0;
+  return base * rate / 100;
+};
 
 const DeliveryAdminPanel = () => {
   const [orders, setOrders] = useState([]);
@@ -10,10 +31,10 @@ const DeliveryAdminPanel = () => {
     const fetchOrders = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5040/delivery/orders', {
+        const response = await api.get('/delivery/orders', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
+
         console.log('Fetched orders:', response.data);
         // Debug: Check if location data exists
         if (response.data.length > 0) {
@@ -52,8 +73,8 @@ const DeliveryAdminPanel = () => {
   const handleClaimOrder = async (orderId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(
-        `http://localhost:5040/delivery/order/${orderId}`,
+      const response = await api.patch(
+        `delivery/order/${orderId}`,
         { status: 'in-transit' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -72,23 +93,28 @@ const DeliveryAdminPanel = () => {
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(
-        `http://localhost:5040/delivery/order/${orderId}`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      console.log('Status update response:', response.data);
+      const headers = { Authorization: `Bearer ${token}` };
 
-      setOrders(orders.map(order =>
-        order._id === orderId ? { ...order, status: newStatus } : order
-      ));
+      if (newStatus === 'delivered') {
+        // Mark as delivered -> gọi API complete
+        await api.post(`/delivery/orders/${orderId}/complete`, {}, { headers });
+      } else if (newStatus === 'in-transit' || newStatus === 'accepted') {
+        // Nhận/nhấc đơn -> gọi API assign (BE sẽ đẩy trạng thái sang 'in-transit')
+        await api.post(`/delivery/orders/${orderId}/accept`, {}, { headers });
+      } else {
+        // Các trạng thái khác hiện không có API riêng
+        throw new Error('Unsupported status update flow');
+      }
+
+      // Cập nhật UI lạc quan
+      setOrders(orders.map(o => o._id === orderId ? { ...o, status: newStatus } : o));
       setError('');
     } catch (err) {
-      console.error('Error updating status:', err.message);
+      console.error('Error updating status:', err?.response?.data || err.message);
       setError('Failed to update order status');
     }
   };
-
+  
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'pending':
@@ -155,7 +181,6 @@ const DeliveryAdminPanel = () => {
                   <p>Location data: {JSON.stringify(order.location)}</p>
                 </div>
                 */}
-                
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="font-bold text-lg">Order #{order._id.substring(order._id.length - 6)}</h3>
@@ -172,6 +197,11 @@ const DeliveryAdminPanel = () => {
                     ) : order.deliveryPersonId ? (
                       <p className="text-gray-400 text-sm">Assigned to: Unnamed Delivery Person</p>
                     ) : null}
+                    {order.split?.amounts?.delivery != null && (
+                      <div style={{ marginTop: 6, fontSize: 14 }}>
+                        Thu cho chuyến này: <b>{fmt(getShare(order, 'delivery'))}</b>
+                      </div>
+                    )}
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeClass(order.status)}`}>
                     {order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : 'Unknown'}
@@ -222,13 +252,28 @@ const DeliveryAdminPanel = () => {
                   )}
                 </div>
 
+                {order.customerContact && (
+                  <div className="bg-gray-800 p-4 rounded-lg mb-4">
+                    <h4 className="font-medium text-yellow-500 mb-2">Khách hàng</h4>
+                    <p className="text-gray-200">
+                      {order.customerContact.fullName || 'Khách hàng'}{" "}
+                      {order.customerContact.phone && `– ${order.customerContact.phone}`}
+                    </p>
+                    {order.customerContact.address && (
+                      <p className="text-gray-400 text-sm mt-1">
+                        Địa chỉ: {order.customerContact.address}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2 mb-4">
                   <h4 className="font-medium text-yellow-500 mb-2">Order Items</h4>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, index) => (
                       <div key={index} className="flex justify-between py-1 border-b border-gray-800">
                         <span>{item.quantity}x {item.name}</span>
-                        <span>${(item.price * item.quantity).toFixed(2)}</span>
+                        <span>{fmt(item.price * item.quantity)}</span>
                       </div>
                     ))
                   ) : (
@@ -262,7 +307,7 @@ const DeliveryAdminPanel = () => {
                   </div>
                   <div className="font-bold">
                     <span>Total: </span>
-                    <span className="text-yellow-500">${order.total ? order.total.toFixed(2) : '0.00'}</span>
+                    <span className="text-yellow-500">{fmt(getBaseAmount(order))}</span>
                   </div>
                 </div>
               </div>
