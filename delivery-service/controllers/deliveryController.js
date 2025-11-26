@@ -1,30 +1,61 @@
 const deliveryService = require('../services/deliveryService');
 
-exports.listAvailable = async (_req, res) => {
+// Lấy danh sách đơn khả dụng (available orders)
+exports.listAvailable = async (req, res) => {
   try {
-    const data = await deliveryService.listAvailable();
+    // Lấy token từ request gốc để forward sang order-service
+    const auth = req.headers.authorization || '';
+    const data = await deliveryService.listAvailable(auth);
     res.json(data);
   } catch (e) {
     res.status(500).json({ message: e.message || 'Failed to fetch available orders' });
   }
 };
 
-exports.accept = async (req, res) => {
+exports.listMine = async (req, res) => {
   try {
-    const { orderId } = req.params;
-    const doc = await deliveryService.accept(req.user.id, orderId);
-    res.json(doc);
+    const auth = req.headers.authorization || '';
+    const data = await deliveryService.listMine(auth);
+    res.json(data);
   } catch (e) {
-    res.status(400).json({ message: e.message || 'Failed to accept order' });
+    res.status(500).json({ message: e.message || 'Failed to fetch driver orders' });
   }
 };
 
+// exports.getAll = async (req, res) => {
+//   try {
+//     const auth = req.headers.authorization;
+//     const driverId = req.user.id; // lấy từ token
+
+//     const response = await axios.get(`${ORDER_URL}?assignedTo=${driverId}`, {
+//       headers: { Authorization: auth }
+//     });
+//     res.json(response.data);
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// Nhận đơn (assign cho tài xế)
+exports.accept = async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const { orderId } = req.params;
+    const data = await deliveryService.accept(auth, orderId);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ message: e.message || 'Failed to accept order' });
+  }
+};
+
+// Hoàn tất đơn (mark delivered)
 exports.complete = async (req, res) => {
   try {
+    const auth = req.headers.authorization || '';
     const { orderId } = req.params;
-    const doc = await deliveryService.complete(req.user.id, orderId);
-    res.json(doc);
+    const data = await deliveryService.complete(auth, orderId);
+    res.json(data);
   } catch (e) {
-    res.status(400).json({ message: e.message || 'Failed to complete order' });
+    res.status(500).json({ message: e.message || 'Failed to complete order' });
   }
 };
