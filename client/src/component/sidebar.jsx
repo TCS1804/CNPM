@@ -30,6 +30,8 @@ const Sidebar = ({ user }) => {
   // Check if a route is active
   const isActive = (path) => location.pathname === path;
 
+  const showText = isOpen || window.innerWidth >= 1024;
+
   return (
     <>
       {/* Mobile Menu Button */}
@@ -51,11 +53,11 @@ const Sidebar = ({ user }) => {
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center justify-center md:justify-start">
             <div className="bg-yellow-500 rounded-md p-2">
-              <Coffee className="text-black" size={isOpen || window.innerWidth >= 1024 ? 24 : 20} />
+              <Coffee className="text-black" size={showText ? 24 : 20} />
             </div>
-            <h1 className={`ml-2 font-bold text-xl ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>
-            <span className="text-white">Eat</span>
-            <span className="text-green-500">zaa</span>
+            <h1 className={`ml-2 font-bold text-xl ${!showText ? 'hidden' : 'block'}`}>
+              <span className="text-white">Eat</span>
+              <span className="text-green-500">zaa</span>
             </h1>
           </div>
         </div>
@@ -70,7 +72,7 @@ const Sidebar = ({ user }) => {
                            ${isActive('/home') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
               >
                 <Home size={20} />
-                <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Home</span>
+                <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Home</span>
               </Link>
             </li>
             
@@ -81,10 +83,10 @@ const Sidebar = ({ user }) => {
                   <Link 
                     to="/restaurant/profile"
                     className={`flex items-center p-3 rounded-md transition-colors duration-200
-                               ${isActive('/restaurant/profile') ? ' Bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
+                               ${isActive('/restaurant/profile') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <User size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Restaurant Profile</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Restaurant Profile</span>
                   </Link>
                 </li>
                 <li>
@@ -94,7 +96,7 @@ const Sidebar = ({ user }) => {
                                ${isActive('/restaurant/menu') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <Coffee size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Menu Items</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Menu Items</span>
                   </Link>
                 </li>
                 <li>
@@ -104,7 +106,7 @@ const Sidebar = ({ user }) => {
                                ${isActive('/restaurant/menu/add') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <ShoppingBag size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Add Menu Item</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Add Menu Item</span>
                   </Link>
                 </li>
                 <li>
@@ -114,7 +116,7 @@ const Sidebar = ({ user }) => {
                                ${isActive('/restaurant/orders') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <FileText size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Incoming Orders</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Incoming Orders</span>
                   </Link>
                 </li>
               </>
@@ -125,12 +127,22 @@ const Sidebar = ({ user }) => {
               <>
                 <li>
                   <Link 
+                    to="/customer/profile"
+                    className={`flex items-center p-3 rounded-md transition-colors duration-200
+                               ${isActive('/customer/profile') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
+                  >
+                    <User size={20} />
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Customer Profile</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link 
                     to="/create-order"
                     className={`flex items-center p-3 rounded-md transition-colors duration-200
                                ${isActive('/create-order') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <ShoppingCart size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Place Order</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Place Order</span>
                   </Link>
                 </li>
                 <li>
@@ -140,7 +152,7 @@ const Sidebar = ({ user }) => {
                                ${isActive('/orders') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <FileText size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>My Orders</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>My Orders</span>
                   </Link>
                 </li>
               </>
@@ -151,12 +163,22 @@ const Sidebar = ({ user }) => {
               <>
                 <li>
                   <Link 
+                    to="/delivery/profile"
+                    className={`flex items-center p-3 rounded-md transition-colors duration-200
+                               ${isActive('/delivery/profile') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
+                  >
+                    <User size={20} />
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Delivery Profile</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link 
                     to="/delivery-admin"
                     className={`flex items-center p-3 rounded-md transition-colors duration-200
                                ${isActive('/delivery-admin') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <Truck size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>My Orders</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>My Orders</span>
                   </Link>
                 </li>
                 <li>
@@ -166,7 +188,7 @@ const Sidebar = ({ user }) => {
                                ${isActive('/delivery/orders/all') ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'}`}
                   >
                     <FileText size={20} />
-                    <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Available Orders</span>
+                    <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Available Orders</span>
                   </Link>
                 </li>
               </>
@@ -178,7 +200,7 @@ const Sidebar = ({ user }) => {
                 className="flex items-center w-full p-3 rounded-md transition-colors duration-200 hover:bg-gray-800"
               >
                 <LogOut size={20} />
-                <span className={`ml-3 ${!isOpen && window.innerWidth < 1024 ? 'hidden' : 'block'}`}>Logout</span>
+                <span className={`ml-3 ${!showText ? 'hidden' : 'block'}`}>Logout</span>
               </button>
             </li>
           </ul>

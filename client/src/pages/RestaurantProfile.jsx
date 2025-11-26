@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from "../lib/axios";
+import AddressPicker from '../component/AddressPicker';
 
 const RestaurantProfile = () => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [address, setAddress] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -16,12 +20,23 @@ const RestaurantProfile = () => {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await axios.post(
-        'http://localhost:5020/restaurant/api/restaurants', 
-        { name },
+      const payload = {
+        name,
+        address,
+        location: {
+          coordinates: {
+            lat: lat ? Number(lat) : undefined,
+            lng: lng ? Number(lng) : undefined,
+          }
+        }
+      };
+
+      const response = await api.post(
+        "/restaurant/api/restaurants",
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       const created = response.data; // BE trả về document nhà hàng
       if (created && created._id) {
         localStorage.setItem('restaurantId', created._id);
@@ -76,6 +91,47 @@ const RestaurantProfile = () => {
                 required
                 placeholder="Enter your restaurant name"
               />
+            </div>
+
+            <div className="mb-6">
+              <AddressPicker
+                value={address}
+                onChangeAddress={(addr) => setAddress(addr)}
+                onChangeCoords={({ lat, lng }) => {
+                  // auto điền vào 2 ô Lat/Lng bên dưới
+                  setLat(String(lat));
+                  setLng(String(lng));
+                }}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label htmlFor="lat" className="block text-sm font-medium mb-2">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  id="lat"
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                  className="w-full px-4 py-3 rounded bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="e.g. 10.776889"
+                />
+              </div>
+              <div>
+                <label htmlFor="lng" className="block text-sm font-medium mb-2">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  id="lng"
+                  value={lng}
+                  onChange={(e) => setLng(e.target.value)}
+                  className="w-full px-4 py-3 rounded bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="e.g. 106.700806"
+                />
+              </div>
             </div>
             
             <button

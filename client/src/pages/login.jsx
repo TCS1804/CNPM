@@ -2,6 +2,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
+import api from "../lib/axios";
 
 export default function Login() {
   const [form, setForm] = useState({ username: "" , password: "" }); // Changed from username/password to single identifier
@@ -18,30 +19,38 @@ export default function Login() {
     setLoading(true);
     
     try {
-    const res = await axios.post("http://localhost:5010/auth/login", form);
+      const res = await api.post("/auth/login", form);
       const { token, role } = res.data;
+
+      // Lưu token riêng
       localStorage.setItem("token", token);
-      const user = { role: role };
+
+      // Lưu user đầy đủ hơn (có token)
+      const user = { role, token };
       localStorage.setItem("user", JSON.stringify(user));
-       toast.success(`Welcome ${role}`);
+
+      // Lưu role riêng cho các chỗ khác đang dùng localStorage.getItem('role')
+      localStorage.setItem("role", role);
+
+      toast.success(`Welcome ${role}`);
+
       if (role === "admin") {
-        window.location.href = "/admin/dashboard"; 
+        window.location.href = "/admin/dashboard";
       } else if (role === "customer") {
-        window.location.href = "/home"; 
-      }else if (role === "restaurant") {
+        window.location.href = "/home";
+      } else if (role === "restaurant") {
         window.location.href = "/restaurant/orders";
-      }else if (role === "delivery") {
-        window.location.href = "/delivery/orders/all"; 
-      } 
-      else {
-        window.location.href = "/"; 
+      } else if (role === "delivery") {
+        window.location.href = "/delivery/orders/all";
+      } else {
+        window.location.href = "/";
       }
     } catch (err) {
       setError(err.response?.data?.error || "Login failed");
     } finally {
       setLoading(false);
     }
-  };
+    };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4 px-6">

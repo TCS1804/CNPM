@@ -8,6 +8,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminSplit from './pages/AdminSplit';
 import AdminRevenue from './pages/AdminRevenue';
 import AdminOrders from './pages/AdminOrders';
+import AdminDrones from './pages/AdminDrones';
+import AdminDroneMissions from './pages/AdminDroneMissions';
 import MenuManagement from './pages/MenuManagement';
 import MenuItemsList from './pages/MenuItemsList';
 import CreateOrder from './pages/CreateOrder';
@@ -18,6 +20,8 @@ import RestaurantOrders from './pages/RestaurantOrders';
 import HomeAll from './pages/HomeAll';
 import ProtectedLayout from './component/ProtectedLayout';
 import { CartProvider } from './CartContext';
+import CustomerProfile from "./pages/CustomerProfile";
+import DeliveryProfile from "./pages/DeliveryProfile";
 
 const App = () => {
   return (
@@ -37,6 +41,9 @@ const App = () => {
           {/* <Route path="/admin/restaurants" element={<AdminRestaurants />} /> */}
           {/* <Route path="/admin/deliveries" element={<AdminDeliveries />} /> */}
           {/* <Route path="/admin/settings" element={<AdminSettings />} /> */}
+          <Route path="/admin/orders" element={<AdminOrders />} />
+          <Route path="/admin/drones" element={<AdminDrones />} />
+          <Route path="/admin/drone-missions" element={<AdminDroneMissions />} />
           <Route element={<ProtectedLayout />}>
             <Route path="/orders" element={<OrderHistory />} />
           </Route>
@@ -53,6 +60,8 @@ const App = () => {
             <Route path="/delivery-admin" element={<DeliveryAdminPanel />} />
             <Route path="/delivery/orders/all" element={<AllOrders />} />
           </Route>
+          <Route path="/customer/profile" element={<CustomerProfile />} />
+          <Route path="/delivery/profile" element={<DeliveryProfile />} />
         </Routes>
       </BrowserRouter>
     </CartProvider>
