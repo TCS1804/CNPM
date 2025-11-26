@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Footer from '../component/footer';
 import { Menu, MapPin, ChevronDown, Search } from 'lucide-react';
+import api from "../lib/axios";
 
 const Home = () => {
     const [address, setAddress] = useState('');

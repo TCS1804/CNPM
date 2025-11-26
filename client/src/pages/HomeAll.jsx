@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { CartContext } from '../CartContext';
+import api from "../lib/axios";
+
+const formatCurrency = (value) =>
+  (Number(value) || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
 
 const HomeAll = () => {
   const { cart, addToCart } = useContext(CartContext);
@@ -28,7 +34,7 @@ const HomeAll = () => {
       setError('');
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5020/restaurant/menu/all', {
+        const response = await api.get("/restaurant/menu/all", {
           headers: { Authorization: `Bearer ${token}` }
         });
         console.log('Fetched menu items:', response.data);
@@ -385,7 +391,7 @@ const HomeAll = () => {
                                 {4.5 + (index % 5) / 10}
                               </span>
                               <span className="mr-2">{20 + (index % 3) * 5}–{35 + (index % 3) * 5} min</span>
-                              <span>${item.price.toFixed(2)} fee</span>
+                              <span>{formatCurrency(item.price)} fee</span>
                             </div>
                             <button
                               onClick={(e) => {
@@ -472,7 +478,7 @@ const HomeAll = () => {
                                 {4.6 + (index % 3) / 10}
                               </span>
                               <span className="mr-2">{15 + (index % 4) * 5}–{30 + (index % 4) * 5} min</span>
-                              <span>${item.price.toFixed(2)} fee</span>
+                              <span>{formatCurrency(item.price)} fee</span>
                             </div>
                             <button
                               onClick={(e) => {
