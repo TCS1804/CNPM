@@ -1,18 +1,21 @@
-// client/src/pages/AdminRevenue.jsx
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from "../lib/axios";
 
 const AdminRevenue = () => {
-  const [data, setData] = useState({ count: 0, total: { admin: 0, restaurant: 0, delivery: 0 }, currency: 'VND' });
   const [error, setError] = useState('');
+  const [data, setData] = useState({
+    count: 0,
+    total: { admin: 0, restaurant: 0, delivery: 0 },
+    currency: 'USD',
+  });
 
   useEffect(() => {
     const run = async () => {
       try {
         const token = localStorage.getItem('token');
-        const ORDER_BASE = import.meta.env.VITE_ORDER_BASE_URL || 'http://localhost:5030';
-        const res = await axios.get(`${ORDER_BASE}/order/admin/summary`, {
-            headers: { Authorization: `Bearer ${token}` }
+        const ORDER_BASE = import.meta.env.VITE_ORDER_BASE_URL || '/orders';
+        const res = await api.get(`${ORDER_BASE}/admin/summary`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
         setData(res.data || {});
       } catch (e) {
@@ -22,7 +25,13 @@ const AdminRevenue = () => {
     run();
   }, []);
 
-  const fmt = (v) => (Number(v || 0) / 100).toFixed(2);
+  const fmt = (cents, currency = 'USD') =>
+    (Number(cents || 0) / 100).toLocaleString('en-US', {
+      style: 'currency',
+      currency,
+    });
+
+  const cur = data.currency || 'USD';
 
   return (
     <div style={{ maxWidth: 680, margin: '24px auto' }}>
@@ -31,9 +40,9 @@ const AdminRevenue = () => {
       <div style={{ border: '1px solid #eee', padding: 16, borderRadius: 8 }}>
         <p>Số đơn đã chốt: <b>{data.count || 0}</b></p>
         <ul>
-          <li>Admin: <b>{fmt(data.total?.admin)} {data.currency}</b></li>
-          <li>Restaurant: <b>{fmt(data.total?.restaurant)} {data.currency}</b></li>
-          <li>Delivery: <b>{fmt(data.total?.delivery)} {data.currency}</b></li>
+          <li>Admin: <b>{fmt(data.total?.admin, cur)}</b></li>
+          <li>Restaurant: <b>{fmt(data.total?.restaurant, cur)}</b></li>
+          <li>Delivery: <b>{fmt(data.total?.delivery, cur)}</b></li>
         </ul>
       </div>
     </div>

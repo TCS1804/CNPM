@@ -1,56 +1,72 @@
-// src/pages/AdminOrders.jsx
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import dayjs from 'dayjs';
+import api from "../lib/axios";
+import DroneSimulationMap from "../component/DroneSimulationMap";
 
-const ORDER_API = import.meta.env.VITE_ORDER_API || 'http://localhost:5030/order';
+const ORDER_API = import.meta.env.VITE_ORDER_API || 'http://localhost:5020/api/orders';
 const LIST_ENDPOINT_PREFERRED = '/admin/list'; // bạn có thể đổi thành '/all' hay '/list' tuỳ BE
 const LIST_ENDPOINT_FALLBACK = '/';            // fallback: GET /order
 
 const pageSizeDefault = 10;
 
-const money = (v, currency = 'USD') => {
-  // Nếu BE lưu cents => chia 100. Nếu bạn dùng VND thuần, hãy đổi thành: return `${Number(v||0).toLocaleString()} ${currency}`
-  const n = Number(v || 0) / 100;
-  return `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
-};
+const money = (v, currency = 'USD') =>
+  Number(v || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency,
+  });
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
-  const [currency, setCurrency] = useState('VND');
+  const [currency, setCurrency] = useState('USD');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState(''); // '', 'pending', 'accepted', 'in-transit', 'delivered'
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(pageSizeDefault);
+  const [restaurants, setRestaurants] = useState([]);
+  const [droneOrder, setDroneOrder] = useState(null);
 
   const token = localStorage.getItem('token');
+
+  // Lấy danh sách nhà hàng từ restaurant-service (route không cần role đặc biệt)
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        const res = await api.get("/restaurant/api/restaurants");
+        const arr = Array.isArray(res.data) ? res.data : [];
+        setRestaurants(arr);
+      } catch (e) {
+        console.error("Failed to fetch restaurants for drone map:", e.response?.data || e.message);
+      }
+    };
+    fetchRestaurants();
+  }, []);
 
   const fetchOrders = async () => {
     setLoading(true);
     setErr('');
     try {
       // Thử endpoint ưu tiên
-      const res = await axios.get(`${ORDER_API}${LIST_ENDPOINT_PREFERRED}`, {
+      const res = await api.get(`${ORDER_API}${LIST_ENDPOINT_PREFERRED}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const arr = Array.isArray(res.data) ? res.data : (res.data?.orders || []);
       setOrders(arr);
       // Đoán currency từ 1 order có split
-      const c = arr.find(o => o?.split?.currency)?.split?.currency || 'VND';
+      const c = arr.find(o => o?.split?.currency)?.split?.currency || 'USD';
       setCurrency(c);
     } catch (e) {
       // Nếu 404 hoặc network error, thử fallback
       const statusCode = e?.response?.status;
       if (statusCode === 404 || statusCode === 400 || !statusCode) {
         try {
-          const res2 = await axios.get(`${ORDER_API}${LIST_ENDPOINT_FALLBACK}`, {
+          const res2 = await api.get(`${ORDER_API}${LIST_ENDPOINT_FALLBACK}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           const arr2 = Array.isArray(res2.data) ? res2.data : (res2.data?.orders || []);
           setOrders(arr2);
-          const c2 = arr2.find(o => o?.split?.currency)?.split?.currency || 'VND';
+          const c2 = arr2.find(o => o?.split?.currency)?.split?.currency || 'USD';
           setCurrency(c2);
         } catch (e2) {
           setErr(e2?.response?.data?.message || e2.message || 'Không lấy được danh sách đơn');
@@ -89,98 +105,160 @@ const AdminOrders = () => {
   const pageClamped = Math.min(page, totalPages);
   const sliceStart = (pageClamped - 1) * pageSize;
   const pageData = filtered.slice(sliceStart, sliceStart + pageSize);
+  // đặt trong component AdminOrders, ngay trên `return ( ... )` cũng được
+  const getBaseAmount = (o) => {
+    if (!o) return 0;
+    if (typeof o.total === 'number') return o.total;               // total dạng đô
+    if (typeof o.totalCents === 'number') return o.totalCents / 100; // total dạng cent
+    return 0;
+  };
+  // Đã có getBaseAmount(o) như mục 1
+  const getShare = (o, key) => {
+    const amounts = o?.split?.amounts || {};
+    const rates = o?.split?.rates || {};
+    const base = getBaseAmount(o);
+
+    const cents = amounts[key];
+    if (typeof cents === 'number') {
+      // DB đang lưu cent
+      return cents / 100;
+    }
+
+    // fallback: tính theo % nếu chưa có amounts
+    const rate = rates[key] || 0;
+    return base * rate / 100;
+  };
 
   return (
-    <div style={{ maxWidth: 1200, margin: '24px auto', padding: '0 16px' }}>
-      <h2>Admin — Danh sách đơn hàng</h2>
+    <>
+      <div style={{ maxWidth: 1200, margin: '24px auto', padding: '0 16px' }}>
+        <h2>Admin — Danh sách đơn hàng</h2>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
-        <input
-          placeholder="Tìm theo ID/restaurantId/customerId…"
-          value={q}
-          onChange={e => { setQ(e.target.value); setPage(1); }}
-          style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd', minWidth: 280 }}
-        />
-        <select
-          value={status}
-          onChange={e => { setStatus(e.target.value); setPage(1); }}
-          style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd' }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="pending">pending</option>
-          <option value="accepted">accepted</option>
-          <option value="in-transit">in-transit</option>
-          <option value="delivered">delivered</option>
-        </select>
-        <button onClick={fetchOrders} disabled={loading} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd' }}>
-          {loading ? 'Đang tải…' : 'Tải lại'}
-        </button>
-        <div style={{ marginLeft: 'auto' }}>
-          <label style={{ marginRight: 8 }}>Trang:</label>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={pageClamped <= 1} style={{ marginRight: 6 }}>‹</button>
-          <b>{pageClamped}</b> / {totalPages}
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={pageClamped >= totalPages} style={{ marginLeft: 6 }}>›</button>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
+          <input
+            placeholder="Tìm theo ID/restaurantId/customerId…"
+            value={q}
+            onChange={e => { setQ(e.target.value); setPage(1); }}
+            style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd', minWidth: 280 }}
+          />
           <select
-            value={pageSize}
-            onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-            style={{ marginLeft: 10, padding: '4px 8px' }}
+            value={status}
+            onChange={e => { setStatus(e.target.value); setPage(1); }}
+            style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd' }}
           >
-            {[10, 20, 50].map(n => <option key={n} value={n}>{n}/trang</option>)}
+            <option value="">Tất cả trạng thái</option>
+            <option value="pending">pending</option>
+            <option value="accepted">accepted</option>
+            <option value="in-transit">in-transit</option>
+            <option value="delivered">delivered</option>
           </select>
+          <button onClick={fetchOrders} disabled={loading} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd' }}>
+            {loading ? 'Đang tải…' : 'Tải lại'}
+          </button>
+          <div style={{ marginLeft: 'auto' }}>
+            <label style={{ marginRight: 8 }}>Trang:</label>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={pageClamped <= 1} style={{ marginRight: 6 }}>‹</button>
+            <b>{pageClamped}</b> / {totalPages}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={pageClamped >= totalPages} style={{ marginLeft: 6 }}>›</button>
+            <select
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+              style={{ marginLeft: 10, padding: '4px 8px' }}
+            >
+              {[10, 20, 50].map(n => <option key={n} value={n}>{n}/trang</option>)}
+            </select>
+          </div>
         </div>
-      </div>
 
-      {err && (
-        <div style={{ color: 'red', marginBottom: 8 }}>
-          {err}
-        </div>
-      )}
+        {err && (
+          <div style={{ color: 'red', marginBottom: 8 }}>
+            {err}
+          </div>
+        )}
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: '#fafafa' }}>
-              <th style={th}>Mã đơn</th>
-              <th style={th}>Thời gian</th>
-              <th style={th}>Khách</th>
-              <th style={th}>Nhà hàng</th>
-              <th style={thRight}>Tổng</th>
-              <th style={thRight}>Restaurant</th>
-              <th style={thRight}>Admin</th>
-              <th style={thRight}>Delivery</th>
-              <th style={th}>Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageData.map((o) => {
-              const cur = o?.split?.currency || currency || 'VND';
-              const a = o?.split?.amounts || {};
-              return (
-                <tr key={o._id} style={{ borderTop: '1px solid #eee' }}>
-                  <td style={tdMono}>{o._id}</td>
-                  <td style={td}>{dayjs(o.createdAt || o.updatedAt).format('YYYY-MM-DD HH:mm')}</td>
-                  <td style={tdMono}>{o.customerId || '-'}</td>
-                  <td style={tdMono}>{o.restaurantId || '-'}</td>
-                  <td style={tdRight}>{money((o.totalCents ?? (Number(o.total || 0) * 100)), cur)}</td>
-                  <td style={tdRight}>{money(a.restaurant, cur)}</td>
-                  <td style={tdRight}>{money(a.admin, cur)}</td>
-                  <td style={tdRight}>{money(a.delivery, cur)}</td>
-                  <td style={td}>{o.status || '-'}</td>
-                </tr>
-              );
-            })}
-            {!loading && pageData.length === 0 && (
-              <tr>
-                <td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#666' }}>
-                  Không có dữ liệu.
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#fafafa' }}>
+                <th style={th}>Mã đơn</th>
+                <th style={th}>Thời gian</th>
+                <th style={th}>Khách</th>
+                <th style={th}>Nhà hàng</th>
+                <th style={thRight}>Tổng</th>
+                <th style={thRight}>Restaurant</th>
+                <th style={thRight}>Admin</th>
+                <th style={thRight}>Delivery</th>
+                <th style={th}>Trạng thái</th>
+                <th style={th}>Drone</th> 
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {pageData.map((o) => {
+                const cur = o?.split?.currency || currency || 'USD';
 
-    </div>
+                const base = getBaseAmount(o);
+                const restaurantShare = getShare(o, 'restaurant');
+                const adminShare = getShare(o, 'admin');
+                const deliveryShare = getShare(o, 'delivery');
+
+                return (
+                  <tr key={o._id} style={{ borderTop: '1px solid #eee' }}>
+                    <td style={tdMono}>{o._id}</td>
+                    <td style={td}>{dayjs(o.createdAt || o.updatedAt).format('YYYY-MM-DD HH:mm')}</td>
+                    <td style={tdMono}>{o.customerId || '-'}</td>
+                    <td style={tdMono}>{o.restaurantId || '-'}</td>
+                    <td style={tdRight}>{money(base, cur)}</td>
+                    <td style={tdRight}>{money(restaurantShare, cur)}</td>
+                    <td style={tdRight}>{money(adminShare, cur)}</td>
+                    <td style={tdRight}>{money(deliveryShare, cur)}</td>
+                    <td style={td}>{o.status || '-'}</td>
+                    {/* ✅ cột Drone */}
+                    <td style={td}>
+                      {o.transportMode === 'drone' &&
+                        ['accepted', 'in-transit', 'delivered'].includes(
+                          (o.status || '').toLowerCase()
+                        ) &&
+                        o.location?.coordinates &&
+                        (() => {
+                          const restaurant = restaurants.find(r => r._id === o.restaurantId);
+                          const restaurantCoords = restaurant?.location?.coordinates;
+                          const customerCoords = o.location?.coordinates;
+
+                          if (!restaurantCoords || !customerCoords) return null;
+
+                          return (
+                            <button
+                              onClick={() =>
+                                setDroneOrder({
+                                  order: o,
+                                  restaurantCoords,
+                                  customerCoords,
+                                })
+                              }
+                              className="px-2 py-1 text-xs rounded bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              Xem drone
+                            </button>
+                          );
+                        })()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {droneOrder && (
+        <DroneSimulationMap
+          isOpen={!!droneOrder}
+          onClose={() => setDroneOrder(null)}
+          orderId={droneOrder.order._id}
+          restaurantCoords={droneOrder.restaurantCoords}
+          customerCoords={droneOrder.customerCoords}
+        />
+      )}
+    </>
   );
 };
 

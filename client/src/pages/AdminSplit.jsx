@@ -1,20 +1,21 @@
 // client/src/pages/AdminSplit.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import api from "../lib/axios";
 
 const AdminSplit = () => {
   const [method, setMethod] = useState('percent');
   const [percent, setPercent] = useState({ admin: 10, restaurant: 85, delivery: 5 });
   const [fixed, setFixed] = useState({ deliveryFee: 0 });
-  const [currency, setCurrency] = useState('VND');
+  const [currency, setCurrency] = useState('USD');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
   const token = localStorage.getItem('token');
 
-  const BASE = import.meta.env.VITE_PAYMENT_BASE_URL || 'http://localhost:5080';  // vd: http://localhost:5080
+  const BASE = import.meta.env.VITE_PAYMENT_BASE_URL || '/payments';  // vd: http://localhost:5020/api/payments
   const fetchConfig = async () => {
-    const res = await axios.get(`${BASE}/payment/split-config`, {
+    const res = await api.get(`${BASE}/split-config`, {
       headers: { Authorization: `Bearer ${token}` }
     });
   }
@@ -33,7 +34,7 @@ const AdminSplit = () => {
           return;
         }
       }
-      await axios.post(`${BASE}/payment/split-config`, {
+      await api.post(`${BASE}/split-config`, {
         method, percent, fixed, currency
       }, {
         headers: { Authorization: `Bearer ${token}` }

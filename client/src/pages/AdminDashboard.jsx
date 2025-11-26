@@ -1,6 +1,7 @@
 // src/pages/AdminDashboard.jsx
 import React, { useMemo } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import api from "../lib/axios";
 
 /**
  * AdminDashboard
@@ -68,6 +69,22 @@ const AdminDashboard = () => {
       to: '/admin/deliveries',
       emoji: '🚚'
     },
+
+    // 👇👇👇 2 CARD MỚI CHO DRONE 👇👇👇
+    {
+      title: 'Quản lý Drone',
+      desc: 'Theo dõi drone, trạng thái, pin và cấu hình kỹ thuật.',
+      to: '/admin/drones',
+      emoji: '🛰️'
+    },
+    {
+      title: 'Nhiệm vụ Drone',
+      desc: 'Giám sát các chuyến bay, tiến trình và trạng thái giao hàng.',
+      to: '/admin/drone-missions',
+      emoji: '📡'
+    },
+    // 👆👆👆 2 CARD MỚI CHO DRONE 👆👆👆
+
     {
       title: 'Cài đặt hệ thống',
       desc: 'Cấu hình chung: thanh toán, bảo mật, branding…',
@@ -138,24 +155,6 @@ const AdminDashboard = () => {
           </Link>
         ))}
       </section>
-
-      {/* Khu vực có thể nhúng thêm quick-stats trong tương lai */}
-      {/* <section style={{ marginTop: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-          <div style={{ border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
-            <div style={{ color: '#666', fontSize: 13 }}>Đơn hôm nay</div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>128</div>
-          </div>
-          <div style={{ border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
-            <div style={{ color: '#666', fontSize: 13 }}>Doanh thu hôm nay</div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>12,450,000 đ</div>
-          </div>
-          <div style={{ border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
-            <div style={{ color: '#666', fontSize: 13 }}>Shipper hoạt động</div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>42</div>
-          </div>
-        </div>
-      </section> */}
     </div>
   );
 };
