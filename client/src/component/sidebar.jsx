@@ -16,6 +16,10 @@ const Sidebar = ({ user }) => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
+    localStorage.removeItem('user');
+    localStorage.removeItem('restaurantId');
+    localStorage.removeItem('cart'); // nếu có lưu giỏ hàng
+    
     navigate('/login');
   };
   

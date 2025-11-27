@@ -52,22 +52,48 @@ const RestaurantOrders = () => {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
+        setLoading(true);
+        setError('');
+
         const token = localStorage.getItem('token');
-        const restaurantId = localStorage.getItem('restaurantId');
+        let restaurantId = localStorage.getItem('restaurantId');
+
+        // 🔁 Fallback: nếu chưa có restaurantId thì gọi API lấy danh sách
+        if (!restaurantId) {
+          const idsRes = await api.get(
+            "/restaurant/api/restaurants-id",
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          const arr = Array.isArray(idsRes.data) ? idsRes.data : [];
+          const first = arr[0];
+
+          if (first && first._id) {
+            restaurantId = first._id;
+            localStorage.setItem('restaurantId', restaurantId);
+          }
+        }
+
+        // Nếu vẫn không có thì chịu → yêu cầu tạo profile
         if (!restaurantId) {
           setError('Missing restaurantId. Please create your restaurant profile first.');
           setLoading(false);
           return;
         }
+
+        // ✅ Lúc này chắc chắn đã có restaurantId
         const response = await api.get(
           `/orders/restaurant?restaurantId=${restaurantId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log('Fetched orders:', response.data); // Debug: Log orders
+        console.log('Fetched orders:', response.data);
         setOrders(response.data);
       } catch (err) {
-        console.error('Error fetching orders:', err.message);
-        setError('Failed to fetch restaurant orders');
+        console.error('Fetch orders error:', err.response?.data || err.message);
+        setError(
+          err.response?.data?.message ||
+          'Failed to fetch orders'
+        );
       } finally {
         setLoading(false);
       }

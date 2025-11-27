@@ -16,4 +16,11 @@ router.put('/api/menu/:itemId', verifyToken, allowRoles('restaurant'), menuContr
 router.delete('/api/menu/:itemId', verifyToken, allowRoles('restaurant'), menuController.deleteItem);
 router.get('/menu/all', menuController.getAll);
 
+router.get(
+  '/api/restaurants-id',
+  verifyToken,
+  allowRoles('restaurant', 'admin'),
+  restaurantController.listIds
+);
+
 module.exports = router;

@@ -9,9 +9,18 @@ exports.list = async (_req, res) => {
   }
 };
 
-exports.listIds = async (_req, res) => {
+exports.listIds = async (req, res) => {
   try {
-    const data = await restaurantService.listIds();
+    const filter = {};
+
+    // Nếu là restaurant ⇒ chỉ trả về nhà hàng thuộc owner đó
+    if (req.user?.role === 'restaurant') {
+      const ownerId = req.user.id || req.user._id;
+      filter.owner = ownerId;
+    }
+
+    // Nếu là admin có thể để filter trống để lấy tất cả
+    const data = await restaurantService.listIds(filter);
     res.json(data);
   } catch (e) {
     res.status(500).json({ message: e.message });

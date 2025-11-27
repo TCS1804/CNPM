@@ -3,6 +3,7 @@ const partnerService = require('../services/partnerService');
 const Order = require('../models/Order');
 const { sendEmail } = require('../services/notificationClient');
 const { fetchDeliveryProfile } = require('../services/profileClient');
+const { fetchRestaurants } = require('../services/partnerService');
 
 // Danh sách nhà hàng (proxy sang restaurant-service)
 exports.listRestaurants = async (req, res) => {
@@ -35,9 +36,25 @@ exports.getMenu = async (req, res) => {
 // Đơn theo nhà hàng
 exports.listByRestaurant = async (req, res) => {
   try {
-    const { restaurantId } = req.query;
-    if (!restaurantId)
+    let { restaurantId } = req.query;
+
+    // Nếu là restaurant ⇒ tự tìm restaurant theo owner
+    if (req.user?.role === 'restaurant') {
+      const ownerId = req.user.id || req.user._id;
+
+      // gọi sang restaurant-service để lấy danh sách nhà hàng
+      const allRestaurants = await fetchRestaurants();
+      const mine = allRestaurants.find(
+        (r) => String(r.owner) === String(ownerId)
+      );
+
+      restaurantId = mine?._id;
+    }
+
+    if (!restaurantId) {
       return res.status(400).json({ message: 'restaurantId is required' });
+    }
+
     const data = await orderService.listByRestaurant(restaurantId);
     res.json(data);
   } catch (e) {

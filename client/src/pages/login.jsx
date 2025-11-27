@@ -22,14 +22,15 @@ export default function Login() {
       const res = await api.post("/auth/login", form);
       const { token, role } = res.data;
 
-      // Lưu token riêng
-      localStorage.setItem("token", token);
+      // 🔹 XÓA sạch dữ liệu cũ để khỏi dính restaurantId của tài khoản trước
+      localStorage.removeItem("restaurantId");
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
 
-      // Lưu user đầy đủ hơn (có token)
+      // Lưu token & user mới
+      localStorage.setItem("token", token);
       const user = { role, token };
       localStorage.setItem("user", JSON.stringify(user));
-
-      // Lưu role riêng cho các chỗ khác đang dùng localStorage.getItem('role')
       localStorage.setItem("role", role);
 
       toast.success(`Welcome ${role}`);
@@ -39,7 +40,28 @@ export default function Login() {
       } else if (role === "customer") {
         window.location.href = "/home";
       } else if (role === "restaurant") {
-        window.location.href = "/restaurant/orders";
+        try {
+          // thử lấy danh sách nhà hàng của user hiện tại
+          const resRestaurant = await api.get("/restaurant/api/restaurants-id", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          const arr = Array.isArray(resRestaurant.data) ? resRestaurant.data : [];
+          const first = arr[0];
+
+          if (first && first._id) {
+            // đã có nhà hàng -> lưu id và qua trang orders
+            localStorage.setItem("restaurantId", first._id);
+            window.location.href = "/restaurant/orders";
+          } else {
+            // chưa có nhà hàng -> chuyển tới trang tạo profile
+            window.location.href = "/restaurant/profile";
+          }
+        } catch (e) {
+          console.error("Failed to fetch restaurant ids after login:", e);
+          // trong trường hợp lỗi, đẩy user tới trang tạo profile
+          window.location.href = "/restaurant/profile";
+        }window.location.href = "/restaurant/orders";
       } else if (role === "delivery") {
         window.location.href = "/delivery/orders/all";
       } else {
