@@ -1,20 +1,126 @@
-services:
-  mongo:
-    image: mongo:6
-    container_name: mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    restart: unless-stopped
+# Để chạy db local
+# services:
+#   mongo:
+#     image: mongo:6
+#     container_name: mongo
+#     ports:
+#       - "27017:27017"
+#     volumes:
+#       - mongo_data:/data/db
+#     restart: unless-stopped
 
+#   auth-service:
+#     build: ./auth-service
+#     container_name: auth-service
+#     env_file:
+#       - ./auth-service/.env
+#     depends_on:
+#       - mongo
+#     restart: unless-stopped
+
+#   restaurant-service:
+#     build: ./restaurant-service
+#     container_name: restaurant-service
+#     env_file:
+#       - ./restaurant-service/.env
+#     depends_on:
+#       - mongo
+#     restart: unless-stopped
+
+#   order-service:
+#     build: ./order-service
+#     container_name: order-service
+#     env_file:
+#       - ./order-service/.env
+#     depends_on:
+#       - mongo
+#       - restaurant-service
+#       - auth-service
+#     restart: unless-stopped
+
+#   delivery-service:
+#     build: ./delivery-service
+#     container_name: delivery-service
+#     env_file:
+#       - ./delivery-service/.env
+#     depends_on:
+#       - mongo
+#       - order-service
+#       - auth-service
+#     restart: unless-stopped
+
+#   payment-service:
+#     build: ./payment-service
+#     container_name: payment-service
+#     env_file:
+#       - ./payment-service/.env
+#     depends_on:
+#       - mongo
+#     restart: unless-stopped
+
+#   notification-service:
+#     build: ./notification-service
+#     container_name: notification-service
+#     env_file:
+#       - ./notification-service/.env
+#     depends_on:
+#       - mongo
+#     restart: unless-stopped
+
+#   drone-service:
+#     build: ./drone-service
+#     container_name: drone-service
+#     env_file:
+#       - ./drone-service/.env
+#     ports:
+#       - "5055:5055"
+#     restart: unless-stopped
+
+#   # ✅ Thêm API Gateway (giữ cổng 5020 cho gateway)
+#   api-gateway:
+#     build: ./api-gateway
+#     container_name: api-gateway
+#     env_file:
+#       - ./api-gateway/.env
+#     depends_on:
+#       - auth-service
+#       - restaurant-service
+#       - order-service
+#       - delivery-service
+#       - notification-service
+#       - payment-service
+#     ports:
+#       - "5020:5020"   # <-- THÊM DÒNG NÀY
+#     restart: unless-stopped
+
+#   # (Tuỳ chọn) GUI xem DB
+#   mongo-express:
+#     image: mongo-express:1
+#     container_name: mongo-express
+#     depends_on:
+#       - mongo
+#     ports:
+#       - "8081:8081"
+#     # 🔧 Khuyến nghị: nếu muốn xem Mongo container cục bộ, dùng cấu hình dưới
+#     # (nếu bạn vẫn muốn dùng Atlas thì giữ nguyên ME_CONFIG_MONGODB_URL như cũ)
+#     environment:
+#       ME_CONFIG_MONGODB_SERVER: mongo
+#       ME_CONFIG_MONGODB_PORT: 27017
+#       # ME_CONFIG_MONGODB_URL: mongodb+srv://fast_food:fast_food@cluster0.2rwrcud.mongodb.net/?appName=Cluster0
+#       ME_CONFIG_BASICAUTH_USERNAME: admin
+#       ME_CONFIG_BASICAUTH_PASSWORD: admin
+#     restart: unless-stopped
+
+# volumes:
+#   mongo_data:
+
+# Để chạy db trên Atlas
+services:
   auth-service:
     build: ./auth-service
     container_name: auth-service
     env_file:
       - ./auth-service/.env
-    depends_on:
-      - mongo
     restart: unless-stopped
 
   restaurant-service:
@@ -22,8 +128,6 @@ services:
     container_name: restaurant-service
     env_file:
       - ./restaurant-service/.env
-    depends_on:
-      - mongo
     restart: unless-stopped
 
   order-service:
@@ -32,7 +136,6 @@ services:
     env_file:
       - ./order-service/.env
     depends_on:
-      - mongo
       - restaurant-service
       - auth-service
     restart: unless-stopped
@@ -43,7 +146,6 @@ services:
     env_file:
       - ./delivery-service/.env
     depends_on:
-      - mongo
       - order-service
       - auth-service
     restart: unless-stopped
@@ -53,8 +155,6 @@ services:
     container_name: payment-service
     env_file:
       - ./payment-service/.env
-    depends_on:
-      - mongo
     restart: unless-stopped
 
   notification-service:
@@ -62,8 +162,6 @@ services:
     container_name: notification-service
     env_file:
       - ./notification-service/.env
-    depends_on:
-      - mongo
     restart: unless-stopped
 
   drone-service:
@@ -75,7 +173,6 @@ services:
       - "5055:5055"
     restart: unless-stopped
 
-  # ✅ Thêm API Gateway (giữ cổng 5020 cho gateway)
   api-gateway:
     build: ./api-gateway
     container_name: api-gateway
@@ -89,25 +186,7 @@ services:
       - notification-service
       - payment-service
     ports:
-      - "5020:5020"   # <-- THÊM DÒNG NÀY
-    restart: unless-stopped
-
-  # (Tuỳ chọn) GUI xem DB
-  mongo-express:
-    image: mongo-express:1
-    container_name: mongo-express
-    depends_on:
-      - mongo
-    ports:
-      - "8081:8081"
-    # 🔧 Khuyến nghị: nếu muốn xem Mongo container cục bộ, dùng cấu hình dưới
-    # (nếu bạn vẫn muốn dùng Atlas thì giữ nguyên ME_CONFIG_MONGODB_URL như cũ)
-    environment:
-      ME_CONFIG_MONGODB_SERVER: mongo
-      ME_CONFIG_MONGODB_PORT: 27017
-      # ME_CONFIG_MONGODB_URL: mongodb+srv://fast_food:fast_food@cluster0.2rwrcud.mongodb.net/?appName=Cluster0
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: admin
+      - "5020:5020"
     restart: unless-stopped
 
 volumes:
