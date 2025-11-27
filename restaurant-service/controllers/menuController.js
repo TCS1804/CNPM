@@ -48,10 +48,40 @@ exports.addItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
   try {
     const { itemId } = req.params;
-    const doc = await menuService.updateItem(itemId, req.body);
+
+    // Chỉ cho update một số field cho an toàn
+    const { name, description, price } = req.body;
+    const patch = {};
+
+    if (typeof name === 'string') patch.name = name.trim();
+    if (typeof description === 'string') patch.description = description.trim();
+    if (price !== undefined && price !== null && !Number.isNaN(Number(price))) {
+      patch.price = Number(price);
+    }
+
+    // Nếu gửi kèm ảnh mới -> upload lên Cloudinary
+    if (req.files?.image) {
+      const file = req.files.image;
+
+      const result = await cloudinary.uploader.upload(
+        file.tempFilePath || file.tempFilePathLocal || file.path,
+        {
+          folder: 'fastfood_menu',
+        }
+      );
+
+      patch.imageUrl = result.secure_url;
+    }
+
+    const doc = await menuService.updateItem(itemId, patch);
+    if (!doc) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
     res.json(doc);
   } catch (e) {
-    res.status(400).json({ message: e.message });
+    console.error('updateItem error:', e);
+    res.status(400).json({ message: e.message || 'Failed to update menu item' });
   }
 };
 

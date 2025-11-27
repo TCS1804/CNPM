@@ -80,6 +80,11 @@ const MenuItemsList = () => {
     }
   };
 
+  const handleEdit = (item) => {
+    // Điều hướng sang trang MenuManagement, kèm dữ liệu món
+    navigate('/restaurant/menu/add', { state: { item } });
+  };
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       <header className="bg-yellow-500 text-black p-4 shadow-md">
@@ -152,14 +157,28 @@ const MenuItemsList = () => {
                   <h3 className="text-xl font-bold mb-2">{item.name}</h3>
                   <p className="text-gray-400 mb-4">{item.description}</p>
                   <div className="flex justify-between items-center">
-                    <span className="text-yellow-500 font-bold text-xl">{formatCurrency(item?.price)}</span>
-                    <button
-                      onClick={() => handleDelete(item._id)}
-                      disabled={deleteLoading === item._id}
-                      className={`px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition duration-200 ${deleteLoading === item._id ? 'opacity-70 cursor-not-allowed' : ''}`}
-                    >
-                      {deleteLoading === item._id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    <span className="text-yellow-500 font-bold text-xl">
+                      {formatCurrency(item?.price)}
+                    </span>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(item._id)}
+                        disabled={deleteLoading === item._id}
+                        className={`px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm ${
+                          deleteLoading === item._id ? 'opacity-70 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {deleteLoading === item._id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

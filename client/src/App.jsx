@@ -18,7 +18,7 @@ import DeliveryAdminPanel from './pages/DeliveryAdminPanel';
 import AllOrders from './pages/AllOrders';
 import RestaurantOrders from './pages/RestaurantOrders';
 import HomeAll from './pages/HomeAll';
-import ProtectedLayout from './component/ProtectedLayout';
+import ProtectedLayout from './component/protectedLayout';
 import { CartProvider } from './CartContext';
 import CustomerProfile from "./pages/CustomerProfile";
 import DeliveryProfile from "./pages/DeliveryProfile";
@@ -29,15 +29,14 @@ const App = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/home" element={<HomeAll />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/home" element={<HomeAll />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/split" element={<AdminSplit />} />
           <Route path="/admin/revenue" element={<AdminRevenue />} />
           {/* Nếu bạn có các trang dưới đây, thêm vào luôn */}
           {/* <Route path="/admin/users" element={<AdminUsers />} /> */}
-          <Route path="/admin/orders" element={<AdminOrders />} />
           {/* <Route path="/admin/restaurants" element={<AdminRestaurants />} /> */}
           {/* <Route path="/admin/deliveries" element={<AdminDeliveries />} /> */}
           {/* <Route path="/admin/settings" element={<AdminSettings />} /> */}
@@ -54,14 +53,16 @@ const App = () => {
             <Route path="/restaurant/orders" element={<RestaurantOrders />} />
           </Route>
           <Route element={<ProtectedLayout allowedRoles={['customer']} />}>
+            <Route path="/home" element={<HomeAll />} />
             <Route path="/create-order" element={<CreateOrder />} />
+            <Route path="/orders" element={<OrderHistory />} />
+            <Route path="/customer/profile" element={<CustomerProfile />} />
           </Route>
           <Route element={<ProtectedLayout allowedRoles={['delivery']} />}>
             <Route path="/delivery-admin" element={<DeliveryAdminPanel />} />
             <Route path="/delivery/orders/all" element={<AllOrders />} />
+            <Route path="/delivery/profile" element={<DeliveryProfile />} />
           </Route>
-          <Route path="/customer/profile" element={<CustomerProfile />} />
-          <Route path="/delivery/profile" element={<DeliveryProfile />} />
         </Routes>
       </BrowserRouter>
     </CartProvider>

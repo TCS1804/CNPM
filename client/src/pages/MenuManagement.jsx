@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from "../lib/axios";
 
 const MenuManagement = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const editingItem = location.state?.item || null;
+  const isEditMode = !!editingItem;
+
   const [menuItem, setMenuItem] = useState({
     name: '',
     description: '',
@@ -14,7 +18,20 @@ const MenuManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (editingItem) {
+      setMenuItem({
+        name: editingItem.name || '',
+        description: editingItem.description || '',
+        price: editingItem.price != null ? String(editingItem.price) : ''
+      });
+
+      if (editingItem.imageUrl) {
+        setImagePreview(editingItem.imageUrl);
+      }
+    }
+  }, [editingItem]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -40,20 +57,6 @@ const MenuManagement = () => {
 
     try {
       const token = localStorage.getItem('token');
-      // const formData = new FormData();
-      // formData.append('name', menuItem.name);
-      // formData.append('description', menuItem.description);
-      // formData.append('price', parseFloat(menuItem.price));
-      // if (image) {
-      //   formData.append('image', image);
-      // }
-
-      const restaurantId = localStorage.getItem('restaurantId');
-      if (!restaurantId) {
-        setError('Missing restaurantId. Please create your restaurant profile first.');
-        setLoading(false);
-        return;
-      }
 
       const formData = new FormData();
       formData.append('name', menuItem.name);
@@ -61,24 +64,62 @@ const MenuManagement = () => {
       formData.append('price', parseFloat(menuItem.price));
       if (image) formData.append('image', image);
 
-      const response = await api.post(
-        `/restaurant/api/restaurants/${restaurantId}/menu`,
-        formData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      let response;
 
-      console.log('Menu item added:', response.data); // Debug: Log response
-      setSuccess('Menu item added successfully!');
-      setMenuItem({ name: '', description: '', price: '' });
-      setImage(null);
-      setImagePreview(null);
+      if (isEditMode && editingItem?._id) {
+        // 🛠 CẬP NHẬT MÓN ĂN
+        response = await api.put(
+          `/restaurant/api/menu/${editingItem._id}`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
 
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
+        console.log('Menu item updated:', response.data);
+        setSuccess('Cập nhật món ăn thành công!');
+
+        // Tuỳ bạn: sau khi cập nhật xong có thể quay lại list
+        setTimeout(() => {
+          navigate('/restaurant/menu');
+        }, 1000);
+      } else {
+        // ➕ THÊM MÓN ĂN MỚI (giữ hành vi cũ)
+        const restaurantId = localStorage.getItem('restaurantId');
+        if (!restaurantId) {
+          setError('Missing restaurantId. Please create your restaurant profile first.');
+          setLoading(false);
+          return;
+        }
+
+        response = await api.post(
+          `/restaurant/api/restaurants/${restaurantId}/menu`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+
+        console.log('Menu item added:', response.data);
+        setSuccess('Menu item added successfully!');
+        setMenuItem({ name: '', description: '', price: '' });
+        setImage(null);
+        setImagePreview(null);
+
+        setTimeout(() => {
+          setSuccess('');
+        }, 3000);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add menu item');
-      console.error('Add menu item error:', err);
+      setError(
+        err.response?.data?.message ||
+        (isEditMode ? 'Failed to update menu item' : 'Failed to add menu item')
+      );
+      console.error('Menu item error:', err);
     } finally {
       setLoading(false);
     }
@@ -108,8 +149,9 @@ const MenuManagement = () => {
 
       <main className="flex-1 container mx-auto px-4 py-8 md:py-16">
         <div className="max-w-md mx-auto bg-gray-900 rounded-lg shadow-lg p-6 md:p-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">Add Menu Item</h2>
-
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">
+            {isEditMode ? 'Edit Menu Item' : 'Add New Menu Item'}
+          </h2>
           {error && (
             <div className="bg-red-500 text-white p-3 rounded mb-4">
               {error}
@@ -201,7 +243,9 @@ const MenuManagement = () => {
               disabled={loading}
               className={`w-full py-3 px-4 rounded font-medium bg-yellow-500 text-black hover:bg-yellow-600 transition duration-200 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              {loading ? 'Adding...' : 'Add Menu Item'}
+              {loading 
+                ? (isEditMode ? 'Updating...' : 'Adding...') 
+                : (isEditMode ? 'Update Menu Item' : 'Add Menu Item')}
             </button>
           </form>
         </div>
