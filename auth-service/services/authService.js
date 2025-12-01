@@ -9,6 +9,13 @@ exports.register = async (payload = {}) => {
     err.statusCode = 400;
     throw err;
   }
+
+  if (role === 'admin') {
+    const err = new Error('Cannot register admin via API');
+    err.statusCode = 403;
+    throw err;
+  }
+  
   const hashed = await bcrypt.hash(password, 10);
   const user = new User({ username, password: hashed, role });
   await user.save();

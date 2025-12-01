@@ -1,15 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { verifyToken, allowRoles } = require('../utils/jwt');
+// const { verifyToken, allowRoles } = require('../utils/jwt'); // ❌ không dùng nữa
 const adminController = require('../controllers/adminController');
 
-// Get all users (admin only)
-router.get('/users', verifyToken, allowRoles('admin'), adminController.listUsers);
-
-// Get all restaurants (admin only)
-router.get('/restaurants', verifyToken, allowRoles('admin'), adminController.listRestaurants);
-
-// Approve a restaurant
-router.patch('/verify-restaurant/:id', verifyToken, allowRoles('admin'), adminController.verifyRestaurant);
+// ❗ Không bắt buộc login nữa
+router.get('/users', adminController.listUsers);
+router.get('/restaurants', adminController.listRestaurants);
+router.patch('/verify-restaurant/:id', adminController.verifyRestaurant);
 
 module.exports = router;

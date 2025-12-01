@@ -1,14 +1,37 @@
 const express = require('express');
 const { connect } = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
+const User = require('./models/User'); // 👈 thêm
+
 const app = express();
-app.use(cors()); 
+app.use(cors());
 app.use(express.json());
 
 connect(process.env.MONGO_URI)
-  .then(() => console.log('Auth DB connected'))
+  .then(async () => {
+    console.log('Auth DB connected');
+
+    // ⚙️ Tạo admin mặc định (nếu chưa có)
+    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+    let admin = await User.findOne({ role: 'admin' });
+    if (!admin) {
+      const hashed = await bcrypt.hash(adminPassword, 10);
+      admin = await User.create({
+        username: adminUsername,
+        password: hashed,
+        role: 'admin',
+        verified: true,
+      });
+      console.log('✅ Default admin created:', adminUsername);
+    } else {
+      console.log('✅ Admin already exists:', admin.username);
+    }
+  })
   .catch(err => console.error('Mongo Error:', err));
 
 const authRoutes = require('./routes/auth');
@@ -17,13 +40,10 @@ app.use('/auth', authRoutes);
 const adminRoutes = require('./routes/admin');
 app.use('/admin', adminRoutes);
 
-app.listen(process.env.PORT, () => {
-  console.log(`Auth Service running on port ${process.env.PORT}`);
-});
-
 const profileRoutes = require('./routes/profile');
 app.use('/auth/profile', profileRoutes);
 
+// ⚠️ Chỉ nên listen 1 lần
 app.listen(process.env.PORT, () => {
   console.log(`Auth Service running on port ${process.env.PORT}`);
 });
