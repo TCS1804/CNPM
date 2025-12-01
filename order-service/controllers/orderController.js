@@ -4,6 +4,19 @@ const Order = require('../models/Order');
 const { sendEmail } = require('../services/notificationClient');
 const { fetchDeliveryProfile } = require('../services/profileClient');
 const { fetchRestaurants } = require('../services/partnerService');
+const axios = require('axios');
+
+// Base URL tới restaurant-service.
+// Bạn có thể set env RESTAURANT_SERVICE_URL = 'http://restaurant-service:5002'
+// hoặc 'http://localhost:4002' tùy môi trường.
+const RAW_RESTAURANT_URL =
+  process.env.RESTAURANT_SERVICE_URL || 'http://localhost:4002';
+
+// Đảm bảo base đã có hậu tố /restaurant để match với app.use('/restaurant', ...)
+let RESTAURANT_BASE = RAW_RESTAURANT_URL.replace(/\/+$/, '');
+if (!/\/restaurant$/.test(RESTAURANT_BASE)) {
+  RESTAURANT_BASE += '/restaurant';
+}
 
 // Danh sách nhà hàng (proxy sang restaurant-service)
 exports.listRestaurants = async (req, res) => {
@@ -66,6 +79,30 @@ exports.listByRestaurant = async (req, res) => {
 // Tạo đơn
 exports.createOrder = async (req, res) => {
   try {
+    const { restaurantId, items } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'restaurantId is required' });
+    }
+
+    let restaurant;
+    try {
+      const resp = await axios.get(
+        `${RESTAURANT_BASE}/api/restaurants/${restaurantId}`
+      );
+      restaurant = resp.data;
+    } catch (err) {
+      return res.status(400).json({ 
+        message: 'Nhà hàng không tồn tại hoặc đã bị Xóa/Khóa' 
+      });
+    }
+
+    // Nếu isDeleted hoặc không active ⇒ không cho tạo đơn
+    if (restaurant.isDeleted || !restaurant.isActive) {
+      return res.status(400).json({ 
+        message: 'Nhà hàng đang tạm dừng hoặc bị khóa bởi admin, không thể tạo đơn mới.' 
+      });
+    }
     const userId = req.user?.id || req.user?._id;
     const doc = await orderService.create(userId, req.body);
     res.status(201).json(doc);
