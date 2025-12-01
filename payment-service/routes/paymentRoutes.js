@@ -43,15 +43,11 @@ router.post('/webhook', paymentController.webhook);
 // ================== Split config (admin) ==================
 router.get(
   '/split-config',
-  verifyToken,
-  allowRoles('admin'),
   splitController.getActive
 );
 
 router.post(
   '/split-config',
-  verifyToken,
-  allowRoles('admin'),
   splitController.upsert
 );
 

@@ -12,11 +12,9 @@ const AdminRevenue = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        const token = localStorage.getItem('token');
         const ORDER_BASE = import.meta.env.VITE_ORDER_BASE_URL || '/orders';
-        const res = await api.get(`${ORDER_BASE}/admin/summary`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // ❌ Không gửi Authorization nữa
+        const res = await api.get(`${ORDER_BASE}/admin/summary`);
         setData(res.data || {});
       } catch (e) {
         setError(e?.response?.data?.message || e.message);
@@ -38,11 +36,19 @@ const AdminRevenue = () => {
       <h2>Admin — Tổng hợp chia tiền</h2>
       {error && <p style={{ color: 'red' }}>{error}</p>}
       <div style={{ border: '1px solid #eee', padding: 16, borderRadius: 8 }}>
-        <p>Số đơn đã chốt: <b>{data.count || 0}</b></p>
+        <p>
+          Số đơn đã chốt: <b>{data.count || 0}</b>
+        </p>
         <ul>
-          <li>Admin: <b>{fmt(data.total?.admin, cur)}</b></li>
-          <li>Restaurant: <b>{fmt(data.total?.restaurant, cur)}</b></li>
-          <li>Delivery: <b>{fmt(data.total?.delivery, cur)}</b></li>
+          <li>
+            Admin: <b>{fmt(data.total?.admin, cur)}</b>
+          </li>
+          <li>
+            Restaurant: <b>{fmt(data.total?.restaurant, cur)}</b>
+          </li>
+          <li>
+            Delivery: <b>{fmt(data.total?.delivery, cur)}</b>
+          </li>
         </ul>
       </div>
     </div>

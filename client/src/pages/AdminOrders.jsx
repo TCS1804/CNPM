@@ -27,8 +27,6 @@ const AdminOrders = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [droneOrder, setDroneOrder] = useState(null);
 
-  const token = localStorage.getItem('token');
-
   // Lấy danh sách nhà hàng từ restaurant-service (route không cần role đặc biệt)
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -48,11 +46,10 @@ const AdminOrders = () => {
     setErr('');
     try {
       // Thử endpoint ưu tiên
-      const res = await api.get(`${ORDER_API}${LIST_ENDPOINT_PREFERRED}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get(`${ORDER_API}${LIST_ENDPOINT_PREFERRED}`);
       const arr = Array.isArray(res.data) ? res.data : (res.data?.orders || []);
       setOrders(arr);
+
       // Đoán currency từ 1 order có split
       const c = arr.find(o => o?.split?.currency)?.split?.currency || 'USD';
       setCurrency(c);
@@ -61,9 +58,7 @@ const AdminOrders = () => {
       const statusCode = e?.response?.status;
       if (statusCode === 404 || statusCode === 400 || !statusCode) {
         try {
-          const res2 = await api.get(`${ORDER_API}${LIST_ENDPOINT_FALLBACK}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const res2 = await api.get(`${ORDER_API}${LIST_ENDPOINT_FALLBACK}`);
           const arr2 = Array.isArray(res2.data) ? res2.data : (res2.data?.orders || []);
           setOrders(arr2);
           const c2 = arr2.find(o => o?.split?.currency)?.split?.currency || 'USD';

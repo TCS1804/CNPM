@@ -10,21 +10,6 @@ import api from "../lib/axios";
  * - Có kiểm tra quyền admin cơ bản từ localStorage (role = 'admin' hoặc user.role = 'admin')
  */
 const AdminDashboard = () => {
-  // Lấy thông tin role (tùy dự án của bạn có thể lưu khác)
-  const role = useMemo(() => {
-    try {
-      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      return storedUser?.role || localStorage.getItem('role');
-    } catch {
-      return localStorage.getItem('role');
-    }
-  }, []);
-
-  // Không phải admin => về trang login (hoặc trang chủ)
-  if (role !== 'admin') {
-    return <Navigate to="/login" replace />;
-  }
-
   // Danh sách module admin
   const cards = [
     {

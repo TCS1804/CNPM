@@ -2,6 +2,17 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const verifyToken = (req, res, next) => {
+  const url = req.originalUrl || req.url || '';
+
+  // ⚠️ BỎ QUA CHECK TOKEN CHO CÁC ROUTE ADMIN / SPLIT CONFIG
+  // ví dụ: /order/admin/..., /restaurant/admin/..., /payment/split-config
+  if (
+    url.includes('/admin/') ||      // mọi route chứa /admin/
+    url.includes('/split-config')   // route cấu hình chia tiền
+  ) {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -19,17 +30,14 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// --- ✅ HÀM MỚI: verifyTokenOrInternal ---
+// --- ✅ HÀM MỚI: verifyTokenOrInternal (giữ nguyên phần còn lại) ---
 function verifyTokenOrInternal(req, res, next) {
   const internalSecret = req.get('x-internal-secret');
   const expectedSecret = process.env.INTERNAL_SECRET;
 
-  // Nếu header có secret hợp lệ → cho qua (đây là request từ payment-service)
   if (internalSecret && expectedSecret && internalSecret === expectedSecret) {
     return next();
   }
-
-  // Ngược lại → yêu cầu xác thực JWT như thường
   return verifyToken(req, res, next);
 }
 

@@ -1,6 +1,5 @@
 // client/src/pages/AdminSplit.jsx
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import api from "../lib/axios";
 
 const AdminSplit = () => {
@@ -11,23 +10,38 @@ const AdminSplit = () => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const token = localStorage.getItem('token');
+  const BASE = import.meta.env.VITE_PAYMENT_BASE_URL || '/payments';
 
-  const BASE = import.meta.env.VITE_PAYMENT_BASE_URL || '/payments';  // vd: http://localhost:5020/api/payments
   const fetchConfig = async () => {
-    const res = await api.get(`${BASE}/split-config`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-  }
+    setMsg('');
+    try {
+      // ❌ KHÔNG gửi token nữa
+      const res = await api.get(`${BASE}/split-config`);
+      const cfg = res.data || {};
+      if (cfg.method) setMethod(cfg.method);
+      if (cfg.percent) setPercent(cfg.percent);
+      if (cfg.fixed) setFixed(cfg.fixed);
+      if (cfg.currency) setCurrency(cfg.currency);
+    } catch (e) {
+      // Không bắt buộc phải có cấu hình sẵn, nên chỉ log nhẹ
+      console.error('Load split-config failed', e.response?.data || e.message);
+    }
+  };
 
-  useEffect(() => { fetchConfig(); /* eslint-disable react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => {
+    fetchConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSave = async () => {
     setLoading(true);
     setMsg('');
     try {
       if (method === 'percent') {
-        const sum = Number(percent.admin || 0) + Number(percent.restaurant || 0) + Number(percent.delivery || 0);
+        const sum =
+          Number(percent.admin || 0) +
+          Number(percent.restaurant || 0) +
+          Number(percent.delivery || 0);
         if (sum !== 100) {
           setMsg('Tổng phần trăm phải = 100');
           setLoading(false);
@@ -35,9 +49,10 @@ const AdminSplit = () => {
         }
       }
       await api.post(`${BASE}/split-config`, {
-        method, percent, fixed, currency
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+        method,
+        percent,
+        fixed,
+        currency,
       });
       setMsg('Đã lưu cấu hình!');
     } catch (e) {
@@ -63,31 +78,52 @@ const AdminSplit = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <div>
             <label>Admin %</label>
-            <input type="number" value={percent.admin}
-              onChange={e => setPercent(p => ({ ...p, admin: Number(e.target.value) }))} />
+            <input
+              type="number"
+              value={percent.admin}
+              onChange={e =>
+                setPercent(p => ({ ...p, admin: Number(e.target.value) }))
+              }
+            />
           </div>
           <div>
             <label>Restaurant %</label>
-            <input type="number" value={percent.restaurant}
-              onChange={e => setPercent(p => ({ ...p, restaurant: Number(e.target.value) }))} />
+            <input
+              type="number"
+              value={percent.restaurant}
+              onChange={e =>
+                setPercent(p => ({ ...p, restaurant: Number(e.target.value) }))
+              }
+            />
           </div>
           <div>
             <label>Delivery %</label>
-            <input type="number" value={percent.delivery}
-              onChange={e => setPercent(p => ({ ...p, delivery: Number(e.target.value) }))} />
+            <input
+              type="number"
+              value={percent.delivery}
+              onChange={e =>
+                setPercent(p => ({ ...p, delivery: Number(e.target.value) }))
+              }
+            />
           </div>
         </div>
       ) : (
         <div>
           <label>Delivery fee (đồng/cents)</label>
-          <input type="number" value={fixed.deliveryFee}
-            onChange={e => setFixed({ deliveryFee: Number(e.target.value) })} />
+          <input
+            type="number"
+            value={fixed.deliveryFee}
+            onChange={e => setFixed({ deliveryFee: Number(e.target.value) })}
+          />
         </div>
       )}
 
       <div style={{ margin: '12px 0' }}>
         <label>Tiền tệ</label>
-        <input value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())} />
+        <input
+          value={currency}
+          onChange={e => setCurrency(e.target.value.toUpperCase())}
+        />
       </div>
 
       <button onClick={handleSave} disabled={loading}>

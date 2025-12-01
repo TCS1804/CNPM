@@ -2,6 +2,16 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const verifyToken = (req, res, next) => {
+  const url = req.originalUrl || req.url || '';
+
+  // ⚠️ BỎ QUA CHECK TOKEN CHO ADMIN / SPLIT CONFIG
+  if (
+    url.includes('/admin/') ||      // mọi route /.../admin/...
+    url.includes('/split-config')   // route cấu hình chia tiền
+  ) {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

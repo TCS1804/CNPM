@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import api from '../lib/axios';
 
 const STATUS_LABEL = {
@@ -9,17 +8,7 @@ const STATUS_LABEL = {
 };
 
 const AdminRestaurants = () => {
-  // Kiểm tra quyền admin (giống AdminDashboard)
-  const role = useMemo(() => {
-    try {
-      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      if (storedUser?.role) return storedUser.role;
-      const r = localStorage.getItem('role');
-      return r || null;
-    } catch {
-      return null;
-    }
-  }, []);
+  // ❌ Bỏ check role / Navigate, admin không cần đăng nhập
 
   const [data, setData] = useState({
     items: [],
@@ -47,11 +36,6 @@ const AdminRestaurants = () => {
     isActive: true,
   });
   const [saving, setSaving] = useState(false);
-
-  // Nếu không phải admin ⇒ chặn
-  if (role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
 
   const fetchOwners = async () => {
     try {
@@ -160,10 +144,10 @@ const AdminRestaurants = () => {
         payload.location.coordinates.lng = Number(form.lng);
       }
 
-      if (payload.location.coordinates.lat === undefined && 
-          payload.location.coordinates.lng === undefined
+      if (
+        payload.location.coordinates.lat === undefined &&
+        payload.location.coordinates.lng === undefined
       ) {
-        // nếu cả 2 đều undefined thì bỏ hẳn location để tránh lưu object rỗng
         delete payload.location;
       }
 
@@ -212,7 +196,14 @@ const AdminRestaurants = () => {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
-      <header style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <header
+        style={{
+          marginBottom: 24,
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
         <div>
           <h2 style={{ margin: 0 }}>Quản lý nhà hàng (Admin)</h2>
           <p style={{ margin: '4px 0 0', color: '#666' }}>
@@ -306,7 +297,9 @@ const AdminRestaurants = () => {
         ) : err ? (
           <div style={{ padding: 20, color: 'red' }}>{err}</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table
+            style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}
+          >
             <thead>
               <tr>
                 <th style={th}>Tên nhà hàng</th>
@@ -444,9 +437,14 @@ const AdminRestaurants = () => {
         <div style={modalOverlay}>
           <div style={modalBody}>
             <h3 style={{ marginTop: 0 }}>
-              {formMode === 'create' ? 'Thêm nhà hàng mới' : 'Sửa thông tin nhà hàng'}
+              {formMode === 'create'
+                ? 'Thêm nhà hàng mới'
+                : 'Sửa thông tin nhà hàng'}
             </h3>
-            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <form
+              onSubmit={handleSave}
+              style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+            >
               <label style={label}>
                 Tên nhà hàng *
                 <input
@@ -504,12 +502,20 @@ const AdminRestaurants = () => {
                   <option value="">-- Chọn chủ nhà hàng --</option>
                   {owners.map((u) => (
                     <option key={u._id} value={u._id}>
-                      {u.username} {u.verified ? '(đã xác thực)' : '(chưa xác thực)'}
+                      {u.username}{' '}
+                      {u.verified ? '(đã xác thực)' : '(chưa xác thực)'}
                     </option>
                   ))}
                 </select>
               </label>
-              <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <label
+                style={{
+                  ...label,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
                 <input
                   type="checkbox"
                   name="isActive"
@@ -518,7 +524,14 @@ const AdminRestaurants = () => {
                 />
                 Đang hoạt động
               </label>
-              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div
+                style={{
+                  marginTop: 12,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                }}
+              >
                 <button type="button" onClick={closeForm} style={btnGhost}>
                   Hủy
                 </button>

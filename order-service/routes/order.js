@@ -169,7 +169,7 @@ router.patch('/:id/split', verifyTokenOrInternal, async (req, res) => {
   }
 });
 
-router.get('/admin/summary', verifyToken, allowRoles('admin'), async (req, res) => {
+router.get('/admin/summary', async (req, res) => {
   try {
     const orders = await Order.find({ 'split.settledAt': { $exists: true } });
     const total = orders.reduce((acc, o) => {
@@ -186,7 +186,7 @@ router.get('/admin/summary', verifyToken, allowRoles('admin'), async (req, res) 
 });
 
 // ✅ Thêm danh sách đơn cho admin
-router.get('/admin/list', verifyToken, allowRoles('admin'), async (req, res) => {
+router.get('/admin/list', async (req, res) => {
   try {
     const orders = await Order.find({}).sort({ createdAt: -1 });
     res.json(orders);
