@@ -22,6 +22,7 @@ import ProtectedLayout from './component/protectedLayout';
 import { CartProvider } from './CartContext';
 import CustomerProfile from "./pages/CustomerProfile";
 import DeliveryProfile from "./pages/DeliveryProfile";
+import AdminRestaurants from './pages/AdminRestaurants';
 
 const App = () => {
   return (
@@ -29,7 +30,7 @@ const App = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/home" element={<HomeAll />} />
+          {/* <Route path="/home" element={<HomeAll />} /> */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -37,14 +38,14 @@ const App = () => {
           <Route path="/admin/revenue" element={<AdminRevenue />} />
           {/* Nếu bạn có các trang dưới đây, thêm vào luôn */}
           {/* <Route path="/admin/users" element={<AdminUsers />} /> */}
-          {/* <Route path="/admin/restaurants" element={<AdminRestaurants />} /> */}
+          <Route path="/admin/restaurants" element={<AdminRestaurants />} />
           {/* <Route path="/admin/deliveries" element={<AdminDeliveries />} /> */}
           {/* <Route path="/admin/settings" element={<AdminSettings />} /> */}
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/drones" element={<AdminDrones />} />
           <Route path="/admin/drone-missions" element={<AdminDroneMissions />} />
           <Route element={<ProtectedLayout />}>
-            <Route path="/orders" element={<OrderHistory />} />
+            {/* <Route path="/orders" element={<OrderHistory />} /> */}
           </Route>
           <Route element={<ProtectedLayout allowedRoles={['restaurant']} />}>
             <Route path="/restaurant/profile" element={<RestaurantProfile />} />

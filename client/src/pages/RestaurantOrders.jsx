@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from "../lib/axios";
 import DroneSimulationMap from "../component/DroneSimulationMap";
 import axios from "axios";
+import RestaurantStatusBanner from '../component/RestaurantStatusBanner';
 
 const DRONE_API =
   import.meta.env.VITE_DRONE_API_BASE_URL || "http://localhost:5055/api/drone";
@@ -183,6 +184,8 @@ const RestaurantOrders = () => {
   return (
     <div className="py-8">
       <h1 className="text-3xl font-bold mb-8">Incoming Orders</h1>
+
+      <RestaurantStatusBanner />  
 
       {error && (
         <div className="bg-red-500 text-white p-3 rounded mb-4">

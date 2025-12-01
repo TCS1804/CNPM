@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from "../lib/axios";
+import RestaurantStatusBanner from '../component/RestaurantStatusBanner';
 
 const formatCurrency = (value) =>
   (Number(value) || 0).toLocaleString('en-US', {
@@ -90,6 +91,9 @@ const MenuItemsList = () => {
       <header className="bg-yellow-500 text-black p-4 shadow-md">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <h1 className="text-2xl font-bold mb-4 md:mb-0">FoodDelivery</h1>
+          
+          <RestaurantStatusBanner />
+          
           <nav className="flex flex-wrap gap-2">
             <button 
               onClick={() => navigate('/restaurant/menu/add')} 

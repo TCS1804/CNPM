@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from "../lib/axios";
 import AddressPicker from '../component/AddressPicker';
+import RestaurantStatusBanner from '../component/RestaurantStatusBanner';
 
 const RestaurantProfile = () => {
   const [name, setName] = useState('');
@@ -70,6 +71,9 @@ const RestaurantProfile = () => {
       <main className="flex-1 container mx-auto px-4 py-8 md:py-16">
         <div className="max-w-md mx-auto bg-gray-900 rounded-lg shadow-lg p-6 md:p-8">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">Create Restaurant Profile</h2>
+          
+          {/* NEW: hiển thị trạng thái nhà hàng */}
+          <RestaurantStatusBanner />
           
           {error && (
             <div className="bg-red-500 text-white p-3 rounded mb-4">
