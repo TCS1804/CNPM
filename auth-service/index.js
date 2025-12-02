@@ -38,7 +38,7 @@ const authRoutes = require('./routes/auth');
 app.use('/auth', authRoutes);
 
 const adminRoutes = require('./routes/admin');
-app.use('/admin', adminRoutes);
+app.use('/auth/admin', adminRoutes);
 
 const profileRoutes = require('./routes/profile');
 app.use('/auth/profile', profileRoutes);

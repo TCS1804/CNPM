@@ -23,6 +23,7 @@ import { CartProvider } from './CartContext';
 import CustomerProfile from "./pages/CustomerProfile";
 import DeliveryProfile from "./pages/DeliveryProfile";
 import AdminRestaurants from './pages/AdminRestaurants';
+import AdminUsers from './pages/AdminUsers';
 
 const App = () => {
   return (
@@ -37,7 +38,7 @@ const App = () => {
           <Route path="/admin/split" element={<AdminSplit />} />
           <Route path="/admin/revenue" element={<AdminRevenue />} />
           {/* Nếu bạn có các trang dưới đây, thêm vào luôn */}
-          {/* <Route path="/admin/users" element={<AdminUsers />} /> */}
+          <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/restaurants" element={<AdminRestaurants />} />
           {/* <Route path="/admin/deliveries" element={<AdminDeliveries />} /> */}
           {/* <Route path="/admin/settings" element={<AdminSettings />} /> */}
