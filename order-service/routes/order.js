@@ -218,6 +218,18 @@ router.patch('/:id', verifyTokenOrInternal, async (req, res) => {
   res.json(doc);
 });
 
+// Admin: list đơn giao hàng (có filter, search) - không yêu cầu login trong bài tập này
+router.get(
+  '/admin/deliveries',
+  orderController.adminListDeliveries
+);
+
+// Admin: xóa (soft delete) một đơn - không yêu cầu login
+router.delete(
+  '/admin/deliveries/:orderId',
+  orderController.adminDeleteOrder
+);
+
 router.patch('/internal/:orderId/drone-mission', async (req, res) => {
   try {
     const { orderId } = req.params;

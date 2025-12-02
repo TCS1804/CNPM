@@ -308,3 +308,121 @@ exports.cancelOrder = async (req, res) => {
     res.status(400).json({ message: e.message });
   }
 };
+
+// List đơn giao hàng cho admin (có filter cơ bản + nâng cao)
+exports.adminListDeliveries = async (req, res) => {
+  try {
+    const {
+      q,              // search chung: mã đơn, tên KH, email...
+      status,
+      driverId,
+      restaurantId,
+      fromDate,
+      toDate,
+      page = 1,
+      limit = 20,
+      includeDeleted,
+    } = req.query;
+
+    const query = {};
+
+    // Không lấy đơn đã xóa trừ khi includeDeleted = true
+    if (!includeDeleted) {
+      query.isDeleted = false;
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (driverId) {
+      query.assignedTo = driverId;
+    }
+
+    if (restaurantId) {
+      query.restaurantId = restaurantId;
+    }
+
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) query.createdAt.$lte = new Date(toDate);
+    }
+
+    // Search text đơn giản (ví dụ theo _id hoặc email khách)
+    if (q) {
+      // Tùy schema thực tế có customerEmail, customerName...  
+      // Ở đây demo tìm theo _id dạng string
+      query.$or = [
+        { _id: q },
+        { customerEmail: new RegExp(q, 'i') },
+        { customerName: new RegExp(q, 'i') },
+      ].filter(Boolean);
+    }
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
+
+    const [items, total] = await Promise.all([
+      Order.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Order.countDocuments(query),
+    ]);
+
+    res.json({
+      data: items,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (e) {
+    console.error('adminListDeliveries error', e);
+    res.status(500).json({ message: e.message || 'Failed to fetch deliveries' });
+  }
+};
+
+// Xóa (soft delete) một đơn giao hàng cho admin
+exports.adminDeleteOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const adminId = req.user?.id || req.user?._id || 'admin';
+
+    const order = await Order.findById(orderId);
+    if (!order || order.isDeleted) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // 1. Không cho xóa nếu đơn đang xử lý
+    const activeStatuses = ['pending', 'accepted', 'in-transit'];
+    if (activeStatuses.includes(order.status)) {
+      return res.status(400).json({
+        message: 'Không thể xóa đơn đang xử lý (pending/accepted/in-transit)',
+      });
+    }
+
+    // 2. Nếu đã settle tiền (split.settledAt) thì chỉ cho xóa mềm
+    const isSettled = !!order.split?.settledAt;
+
+    // -> Dù settle hay chưa, ta vẫn dùng soft delete để an toàn
+    order.isDeleted = true;
+    order.deletedAt = new Date();
+    order.deletedBy = adminId;
+
+    await order.save();
+
+    res.json({
+      message: 'Order deleted (soft delete)',
+      isSettled,
+    });
+  } catch (e) {
+    console.error('adminDeleteOrder error', e);
+    res.status(500).json({ message: e.message || 'Failed to delete order' });
+  }
+};

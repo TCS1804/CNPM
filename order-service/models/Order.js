@@ -73,6 +73,11 @@ const orderSchema = new mongoose.Schema({
     currency: { type: String, default: PLATFORM_CURRENCY },
     settledAt: Date
   },
+
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: Date,
+  deletedBy: String,
+    
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);

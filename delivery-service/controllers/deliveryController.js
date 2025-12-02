@@ -59,3 +59,32 @@ exports.complete = async (req, res) => {
     res.status(500).json({ message: e.message || 'Failed to complete order' });
   }
 };
+
+// Admin: list deliveries
+exports.adminListDeliveries = async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const data = await deliveryService.adminListDeliveries(auth, req.query);
+    res.json(data);
+  } catch (e) {
+    console.error('adminListDeliveries error', e.response?.data || e.message);
+    res.status(500).json({ message: e.message || 'Failed to fetch deliveries' });
+  }
+};
+
+// Admin: delete order (soft delete)
+exports.adminDeleteOrder = async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const { orderId } = req.params;
+    const data = await deliveryService.adminDeleteOrder(auth, orderId);
+    res.json(data);
+  } catch (e) {
+    console.error('adminDeleteOrder error', e.response?.data || e.message);
+    // forward error code nếu có
+    const status = e.response?.status || 500;
+    res.status(status).json({
+      message: e.response?.data?.message || e.message || 'Failed to delete order',
+    });
+  }
+};

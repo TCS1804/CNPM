@@ -64,4 +64,16 @@ router.patch(
   }
 );
 
+// Admin delivery: list deliveries (KHÔNG yêu cầu login theo yêu cầu hiện tại)
+router.get(
+  '/admin/deliveries',
+  deliveryController.adminListDeliveries
+);
+
+// Admin delivery: delete (soft delete) một đơn (KHÔNG yêu cầu login)
+router.delete(
+  '/admin/deliveries/:orderId',
+  deliveryController.adminDeleteOrder
+);
+
 module.exports = router;

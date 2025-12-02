@@ -24,6 +24,7 @@ import CustomerProfile from "./pages/CustomerProfile";
 import DeliveryProfile from "./pages/DeliveryProfile";
 import AdminRestaurants from './pages/AdminRestaurants';
 import AdminUsers from './pages/AdminUsers';
+import AdminDeliveries from './pages/AdminDeliveries';
 
 const App = () => {
   return (
@@ -40,7 +41,7 @@ const App = () => {
           {/* Nếu bạn có các trang dưới đây, thêm vào luôn */}
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/restaurants" element={<AdminRestaurants />} />
-          {/* <Route path="/admin/deliveries" element={<AdminDeliveries />} /> */}
+          <Route path="/admin/deliveries" element={<AdminDeliveries />} />
           {/* <Route path="/admin/settings" element={<AdminSettings />} /> */}
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/drones" element={<AdminDrones />} />

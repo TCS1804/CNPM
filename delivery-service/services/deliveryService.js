@@ -67,3 +67,21 @@ exports.complete = async (auth, orderId) => {
 
   return order;
 };
+
+// Admin: list deliveries (forward sang order-service)
+exports.adminListDeliveries = async (auth, query = {}) => {
+  const res = await axios.get(`${ORDER_URL}/admin/deliveries`, {
+    headers: { Authorization: auth },
+    params: query,
+  });
+  return res.data;
+};
+
+// Admin: delete (soft delete) một đơn
+exports.adminDeleteOrder = async (auth, orderId) => {
+  const res = await axios.delete(`${ORDER_URL}/admin/deliveries/${orderId}`, {
+    headers: { Authorization: auth },
+  });
+  return res.data;
+};
+
