@@ -17,6 +17,15 @@ const AdminDrones = () => {
     lng: 0,
   });
 
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    battery: 100,
+    speedKmh: 40,
+    lat: 0,
+    lng: 0,
+  });
+
   const fetchDrones = async () => {
     setLoading(true);
     setErr("");
@@ -65,6 +74,42 @@ const AdminDrones = () => {
     if (!window.confirm("Xoá drone này?")) return;
     try {
       await axios.delete(`${DRONE_API}/fleet/${id}`);
+      fetchDrones();
+    } catch (e) {
+      alert(e?.response?.data?.error || e.message);
+    }
+  };
+  
+  const startEdit = (d) => {
+    setEditingId(d._id);
+    setEditForm({
+      name: d.name || "",
+      battery: d.battery ?? 100,
+      speedKmh: d.speedKmh ?? 40,
+      lat: d.location?.lat ?? 0,
+      lng: d.location?.lng ?? 0,
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingId) return;
+
+    try {
+      await axios.patch(`${DRONE_API}/fleet/${editingId}`, {
+        name: editForm.name,
+        battery: Number(editForm.battery),
+        speedKmh: Number(editForm.speedKmh),
+        location: {
+          lat: Number(editForm.lat),
+          lng: Number(editForm.lng),
+        },
+      });
+      setEditingId(null);
       fetchDrones();
     } catch (e) {
       alert(e?.response?.data?.error || e.message);
@@ -162,6 +207,88 @@ const AdminDrones = () => {
         </button>
       </form>
 
+      {editingId && (
+        <form
+          onSubmit={handleEditSubmit}
+          className="mb-6 p-4 rounded-lg bg-gray-900 border border-yellow-500"
+        >
+          <h3 className="font-semibold mb-3 text-yellow-300">
+            Sửa thông tin drone
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div>
+              <label className="block text-gray-300 mb-1">Tên</label>
+              <input
+                className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-700 text-white"
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, name: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-1">Battery (%)</label>
+              <input
+                type="number"
+                className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-700 text-white"
+                value={editForm.battery}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, battery: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-1">Speed (km/h)</label>
+              <input
+                type="number"
+                className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-700 text-white"
+                value={editForm.speedKmh}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, speedKmh: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-1">Lat</label>
+              <input
+                type="number"
+                className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-700 text-white"
+                value={editForm.lat}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, lat: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-1">Lng</label>
+              <input
+                type="number"
+                className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-700 text-white"
+                value={editForm.lng}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, lng: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="submit"
+              className="px-4 py-2 rounded bg-yellow-500 text-black hover:bg-yellow-600 text-sm"
+            >
+              Lưu thay đổi
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="px-3 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 text-sm"
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
+      )}
+
       <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-800 text-gray-200">
@@ -192,7 +319,9 @@ const AdminDrones = () => {
               drones.map((d) => (
                 <tr key={d._id} className="border-t border-gray-800">
                   <td className="px-3 py-2 font-mono text-xs">{d.code}</td>
+
                   <td className="px-3 py-2">{d.name || "-"}</td>
+
                   <td className="px-3 py-2">
                     <select
                       className="bg-gray-800 border border-gray-700 text-white text-xs px-2 py-1 rounded"
@@ -208,16 +337,27 @@ const AdminDrones = () => {
                       <option value="offline">offline</option>
                     </select>
                   </td>
+
                   <td className="px-3 py-2 text-right">
                     {d.battery?.toFixed?.(0) ?? d.battery}% 
                   </td>
+
                   <td className="px-3 py-2 text-right">
                     {d.speedKmh || 0} km/h
                   </td>
+
                   <td className="px-3 py-2 text-xs text-gray-300">
                     lat: {d.location?.lat ?? 0}, lng: {d.location?.lng ?? 0}
                   </td>
+                  
                   <td className="px-3 py-2 text-center">
+                    <button
+                      onClick={() => startEdit(d)}
+                      className="mr-2 px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700"
+                    >
+                      Xóa
+                    </button>
+                    
                     <button
                       onClick={() => handleDelete(d._id)}
                       className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700"

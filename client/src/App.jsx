@@ -22,6 +22,7 @@ import ProtectedLayout from './component/protectedLayout';
 import { CartProvider } from './CartContext';
 import CustomerProfile from "./pages/CustomerProfile";
 import DeliveryProfile from "./pages/DeliveryProfile";
+import AdminOverview from "./pages/AdminOverview";
 import AdminRestaurants from './pages/AdminRestaurants';
 import AdminUsers from './pages/AdminUsers';
 import AdminDeliveries from './pages/AdminDeliveries';
@@ -39,6 +40,7 @@ const App = () => {
           <Route path="/admin/split" element={<AdminSplit />} />
           <Route path="/admin/revenue" element={<AdminRevenue />} />
           {/* Nếu bạn có các trang dưới đây, thêm vào luôn */}
+          <Route path="/admin/overview" element={<AdminOverview />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/restaurants" element={<AdminRestaurants />} />
           <Route path="/admin/deliveries" element={<AdminDeliveries />} />

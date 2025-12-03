@@ -169,6 +169,89 @@ router.patch('/:id/split', verifyTokenOrInternal, async (req, res) => {
   }
 });
 
+// Tổng quan cho Admin (thống kê cơ bản + đơn gần đây)
+router.get('/admin/overview', async (req, res) => {
+  try {
+    const baseMatch = { isDeleted: { $ne: true } };
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      totalOrders,
+      pendingOrders,
+      acceptedOrders,
+      inTransitOrders,
+      deliveredOrders,
+      todayOrders,
+      recentOrders,
+      revenueAgg,
+    ] = await Promise.all([
+      // tổng số đơn (không tính đã xoá)
+      Order.countDocuments(baseMatch),
+      Order.countDocuments({ ...baseMatch, status: 'pending' }),
+      Order.countDocuments({ ...baseMatch, status: 'accepted' }),
+      Order.countDocuments({ ...baseMatch, status: 'in-transit' }),
+      Order.countDocuments({ ...baseMatch, status: 'delivered' }),
+      Order.countDocuments({ ...baseMatch, createdAt: { $gte: startOfToday } }),
+
+      // 5 đơn gần nhất
+      Order.find(baseMatch)
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('_id status total currency createdAt'),
+
+      // tổng doanh thu đã settle chia theo vai trò
+      Order.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            'split.settledAt': { $exists: true },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            admin: { $sum: '$split.amounts.admin' },
+            restaurant: { $sum: '$split.amounts.restaurant' },
+            delivery: { $sum: '$split.amounts.delivery' },
+          },
+        },
+      ]),
+    ]);
+
+    const revenueRow = revenueAgg[0] || {};
+    const currency = PLATFORM_CURRENCY; // hoặc lấy từ revenueRow nếu bạn muốn
+
+    res.json({
+      orders: {
+        total: totalOrders,
+        pending: pendingOrders,
+        accepted: acceptedOrders,
+        inTransit: inTransitOrders,
+        delivered: deliveredOrders,
+        today: todayOrders,
+      },
+      revenue: {
+        admin: revenueRow.admin || 0,
+        restaurant: revenueRow.restaurant || 0,
+        delivery: revenueRow.delivery || 0,
+        currency,
+      },
+      recentOrders: recentOrders.map((o) => ({
+        id: o._id,
+        status: o.status,
+        total: o.total,
+        currency: o.currency || currency,
+        createdAt: o.createdAt,
+      })),
+    });
+  } catch (e) {
+    console.error('[order-service] GET /admin/overview error', e);
+    res.status(500).json({ message: 'internal_error' });
+  }
+});
+
 router.get('/admin/summary', async (req, res) => {
   try {
     const orders = await Order.find({ 'split.settledAt': { $exists: true } });

@@ -15,7 +15,7 @@ const AdminDashboard = () => {
     {
       title: 'Tổng quan',
       desc: 'Số liệu nhanh và liên kết tính năng quản trị.',
-      to: '/admin/dashboard', // chính trang này (có thể đổi sang /admin/overview nếu tách riêng)
+      to: '/admin/overview', // chính trang này (có thể đổi sang /admin/overview nếu tách riêng)
       emoji: '📊'
     },
     {
@@ -70,12 +70,12 @@ const AdminDashboard = () => {
     },
     // 👆👆👆 2 CARD MỚI CHO DRONE 👆👆👆
 
-    {
-      title: 'Cài đặt hệ thống',
-      desc: 'Cấu hình chung: thanh toán, bảo mật, branding…',
-      to: '/admin/settings',
-      emoji: '🛠️'
-    }
+    // {
+    //   title: 'Cài đặt hệ thống',
+    //   desc: 'Cấu hình chung: thanh toán, bảo mật, branding…',
+    //   to: '/admin/settings',
+    //   emoji: '🛠️'
+    // }
   ];
 
   // Style tối giản, không phụ thuộc thư viện CSS

@@ -173,23 +173,78 @@ app.get('/api/drone/fleet', async (req, res) => {
   }
 });
 
+// Helper: build + validate payload khi tạo / cập nhật
+function buildDronePayload(body) {
+  const payload = {};
+
+  if (typeof body.name === 'string') {
+    payload.name = body.name.trim();
+  }
+
+  if (typeof body.status === 'string') {
+    payload.status = body.status;
+  }
+
+  if (body.battery !== undefined) {
+    const b = Number(body.battery);
+    if (!Number.isFinite(b) || b < 0 || b > 100) {
+      throw new Error('battery_must_be_between_0_and_100');
+    }
+    payload.battery = b;
+  }
+
+  if (body.speedKmh !== undefined) {
+    const s = Number(body.speedKmh);
+    if (!Number.isFinite(s) || s <= 0 || s > 200) {
+      throw new Error('invalid_speedKmh');
+    }
+    payload.speedKmh = s;
+  }
+
+  // location có thể gửi dạng { location: {lat,lng} } hoặc { lat, lng }
+  const rawLat = body.lat ?? body?.location?.lat;
+  const rawLng = body.lng ?? body?.location?.lng;
+  if (rawLat !== undefined || rawLng !== undefined) {
+    const lat = Number(rawLat ?? 0);
+    const lng = Number(rawLng ?? 0);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      throw new Error('invalid_latitude');
+    }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      throw new Error('invalid_longitude');
+    }
+    payload.location = { lat, lng };
+  }
+
+  return payload;
+}
+
 // Tạo drone mới
 app.post('/api/drone/fleet', async (req, res) => {
   try {
-    const payload = {
-      name: req.body.name,
-      code: (req.body.code || '').trim() || `DRN-${uuidv4().slice(0, 8)}`,
-      status: req.body.status || 'idle',
-      battery: typeof req.body.battery === 'number' ? req.body.battery : 100,
-      speedKmh: typeof req.body.speedKmh === 'number' ? req.body.speedKmh : DRONE_SPEED_KMH,
-      location: req.body.location || {},
-    };
+    const baseCode = (req.body.code || '').trim();
+    const code = baseCode || `DRN-${uuidv4().slice(0, 8)}`;
+
+    // đảm bảo code duy nhất
+    const existed = await Drone.findOne({ code });
+    if (existed) {
+      return res.status(400).json({ error: 'code_already_exists' });
+    }
+
+    const payload = buildDronePayload(req.body);
+    payload.code = code;
+
+    // default values
+    if (payload.status == null) payload.status = 'idle';
+    if (payload.battery == null) payload.battery = 100;
+    if (payload.speedKmh == null) payload.speedKmh = DRONE_SPEED_KMH;
+    if (!payload.location) payload.location = { lat: 0, lng: 0 };
 
     const doc = await new Drone(payload).save();
     res.status(201).json(doc);
   } catch (err) {
     console.error('[drone-service] POST /fleet error', err);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message || 'invalid_payload' });
   }
 });
 
@@ -204,17 +259,45 @@ app.get('/api/drone/fleet/:id', async (req, res) => {
   }
 });
 
-// Cập nhật drone
+// Cập nhật drone (có ràng buộc nếu đang có mission)
 app.patch('/api/drone/fleet/:id', async (req, res) => {
   try {
-    const update = {};
-    ['name', 'status', 'battery', 'speedKmh', 'location'].forEach((key) => {
-      if (req.body[key] != null) update[key] = req.body[key];
+    const id = req.params.id;
+    const drone = await Drone.findById(id);
+    if (!drone) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    // kiểm tra mission đang active (queued/assigned/enroute + chưa completedAt)
+    const hasActiveMission = await DroneMission.exists({
+      droneId: id,
+      status: { $in: ['queued', 'assigned', 'enroute'] },
+      completedAt: { $exists: false },
     });
 
+    // Nếu đang bay / có mission active -> chỉ cho đổi name
+    if (hasActiveMission || ['delivering'].includes(drone.status) || drone.currentMissionId) {
+      const name = typeof req.body.name === 'string' ? req.body.name.trim() : undefined;
+      if (!name) {
+        return res.status(400).json({
+          error: 'drone_in_active_mission_only_name_can_be_updated',
+        });
+      }
+
+      const doc = await Drone.findByIdAndUpdate(
+        id,
+        { $set: { name } },
+        { new: true }
+      );
+      return res.json(doc);
+    }
+
+    // Trường hợp không có mission active: cho phép update bình thường (có validate)
+    const payload = buildDronePayload(req.body);
+
     const doc = await Drone.findByIdAndUpdate(
-      req.params.id,
-      { $set: update },
+      id,
+      { $set: payload },
       { new: true }
     );
 
@@ -222,19 +305,51 @@ app.patch('/api/drone/fleet/:id', async (req, res) => {
     res.json(doc);
   } catch (err) {
     console.error('[drone-service] PATCH /fleet/:id error', err);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message || 'invalid_payload' });
   }
 });
 
-// Xoá drone
+// Xoá drone (có ràng buộc lịch sử mission + trạng thái)
 app.delete('/api/drone/fleet/:id', async (req, res) => {
   try {
-    const doc = await Drone.findByIdAndDelete(req.params.id);
-    if (!doc) return res.status(404).json({ error: 'not_found' });
+    const id = req.params.id;
+    const drone = await Drone.findById(id);
+    if (!drone) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    // 1. Không xoá nếu đã từng có mission
+    const hasMissionHistory = await DroneMission.exists({ droneId: id });
+    if (hasMissionHistory) {
+      return res
+        .status(400)
+        .json({ error: 'cannot_delete_drone_with_mission_history' });
+    }
+
+    // 2. Không xoá nếu đang có mission active
+    const hasActiveMission = await DroneMission.exists({
+      droneId: id,
+      status: { $in: ['queued', 'assigned', 'enroute'] },
+      completedAt: { $exists: false },
+    });
+    if (hasActiveMission || drone.currentMissionId) {
+      return res
+        .status(400)
+        .json({ error: 'cannot_delete_drone_with_active_mission' });
+    }
+
+    // 3. Chỉ cho phép xoá khi status là idle hoặc offline
+    if (!['idle', 'offline'].includes(drone.status)) {
+      return res
+        .status(400)
+        .json({ error: 'only_idle_or_offline_drone_can_be_deleted' });
+    }
+
+    await Drone.findByIdAndDelete(id);
     res.json({ ok: true });
   } catch (err) {
     console.error('[drone-service] DELETE /fleet/:id error', err);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message || 'delete_failed' });
   }
 });
 
