@@ -31,36 +31,48 @@ router.post(
 // List + lọc + phân trang
 router.get(
   '/admin/restaurants',
+  verifyToken,
+  allowRoles('admin'),
   restaurantController.adminList
 );
 
 // Xem chi tiết
 router.get(
   '/admin/restaurants/:id',
+  verifyToken,
+  allowRoles('admin'),
   restaurantController.adminGetById
 );
 
 // Tạo mới restaurant thay cho chủ
 router.post(
   '/admin/restaurants',
+  verifyToken,
+  allowRoles('admin'),
   restaurantController.adminCreate
 );
 
 // Sửa thông tin / đổi owner
 router.put(
   '/admin/restaurants/:id',
+  verifyToken,
+  allowRoles('admin'),
   restaurantController.adminUpdate
 );
 
-// Xóa (soft delete)
+// Xóa (hard delete nếu không có orders)
 router.delete(
   '/admin/restaurants/:id',
+  verifyToken,
+  allowRoles('admin'),
   restaurantController.adminDelete
 );
 
 // Bật / tắt hoạt động
 router.patch(
   '/admin/restaurants/:id/status',
+  verifyToken,
+  allowRoles('admin'),
   restaurantController.adminToggleActive
 );
 

@@ -355,7 +355,7 @@ const AdminDrones = () => {
                       onClick={() => startEdit(d)}
                       className="mr-2 px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700"
                     >
-                      Xóa
+                      Sửa
                     </button>
                     
                     <button

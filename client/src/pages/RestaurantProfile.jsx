@@ -41,6 +41,10 @@ const RestaurantProfile = () => {
       const created = response.data; // BE trả về document nhà hàng
       if (created && created._id) {
         localStorage.setItem('restaurantId', created._id);
+        // Notify user that restaurant info saved
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          new Notification('Restaurant', { body: 'Đã lưu thông tin nhà hàng thành công' });
+        }
         navigate('/restaurant/menu');
       } else {
         setError('Server did not return restaurant id');
@@ -144,6 +148,14 @@ const RestaurantProfile = () => {
               className={`w-full py-3 px-4 rounded font-medium bg-yellow-500 text-black hover:bg-yellow-600 transition duration-200 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               {loading ? 'Creating...' : 'Create Restaurant'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/account/change-password")}
+              className="w-full mt-3 py-2 px-4 rounded font-medium bg-gray-700 text-white hover:bg-gray-600 transition"
+            >
+              Đổi mật khẩu
             </button>
           </form>
         </div>

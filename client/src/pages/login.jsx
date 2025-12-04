@@ -19,7 +19,12 @@ export default function Login() {
     setLoading(true);
     
     try {
-      const res = await api.post("/auth/login", form);
+      // Support login by both username and email
+      const loginPayload = {
+        password: form.password,
+        ...(form.username.includes('@') ? { email: form.username } : { username: form.username }),
+      };
+      const res = await api.post("/auth/login", loginPayload);
       const { token, role } = res.data;
 
       // 🔹 XÓA sạch dữ liệu cũ để khỏi dính restaurantId của tài khoản trước
@@ -68,7 +73,12 @@ export default function Login() {
         window.location.href = "/";
       }
     } catch (err) {
-      setError(err.response?.data?.error || "Login failed");
+      const msg = err.response?.data?.error || "Login failed";
+      setError(msg);
+      // Show notification if account deleted
+      if (msg.includes('does not exist') && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Login', { body: 'Tài khoản không tồn tại' });
+      }
     } finally {
       setLoading(false);
     }
@@ -86,33 +96,42 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div>
             <label className="block text-xl font-semibold text-black mb-2">
-              What's your user name or email?
+              Username or Email
             </label>
             <input
               type="text"
               name="username"
               value={form.username}
               onChange={handleChange}
-              placeholder="Enter phone number or email"
+              placeholder="Enter username or email"
               className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 placeholder-gray-400"
               required
             />
           </div>
 
-        <div>
-            <label className="block text-xl font-semibold text-black mb-2">
-                What's your password?
-            </label>
-            <input
-                type="password"
-                name="password"
-                value={form.password || ""}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 placeholder-gray-400"
-                required
-            />
-        </div>
+          <div>
+              <label className="block text-xl font-semibold text-black mb-2">
+                  Password
+              </label>
+              <input
+                  type="password"
+                  name="password"
+                  value={form.password || ""}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 placeholder-gray-400"
+                  required
+              />
+          </div>
+
+          <div className="flex justify-end mb-2">
+            <a
+              href="/forgot-password"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Forgot your password?
+            </a>
+          </div>
 
           <button
             type="submit"

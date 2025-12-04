@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import api from "../lib/axios";
 
 export default function Register() {
-  const [form, setForm] = useState({ username: "", password: "", role: "customer" });
+  const [form, setForm] = useState({ username: "", email: "", password: "", role: "customer" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -48,7 +48,16 @@ export default function Register() {
             name="username"
             value={form.username}
             onChange={handleChange}
-            placeholder="Enter phone number or email"
+            placeholder="Enter username"
+            className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 placeholder-gray-400"
+            required
+          />
+          <input
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+            placeholder="Enter email"
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 placeholder-gray-400"
             required
           />

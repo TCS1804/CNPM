@@ -74,6 +74,10 @@ const orderSchema = new mongoose.Schema({
     settledAt: Date
   },
 
+  // Customer confirmation when they receive the order
+  customerConfirmed: { type: Boolean, default: false },
+  receivedAt: Date,
+
   isDeleted: { type: Boolean, default: false },
   deletedAt: Date,
   deletedBy: String,

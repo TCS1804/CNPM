@@ -88,6 +88,25 @@ const OrderHistory = () => {
     }
   };
 
+  const handleConfirmReceived = async (orderId) => {
+    if (!window.confirm('Xác nhận bạn đã nhận đơn hàng này?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await api.post(
+        `/orders/${orderId}/confirm-received`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // update UI
+      setOrders((prev) => prev.map((o) => (o._id === orderId ? res.data : o)));
+    } catch (err) {
+      console.error('Confirm received error:', err.response?.data || err.message);
+      setError(err.response?.data?.message || 'Failed to confirm received');
+    }
+  };
+
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'pending':
@@ -229,14 +248,29 @@ const OrderHistory = () => {
                   )}
 
                   {role === 'customer' &&
-                    ['pending', 'accepted'].includes(order.status) && (
-                      <div className="pt-2">
-                        <button
-                          onClick={() => handleCancelOrder(order._id)}
-                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-                        >
-                          Huỷ đơn
-                        </button>
+                    (
+                      <div className="pt-2 space-x-2">
+                        {['pending', 'accepted'].includes(order.status) && (
+                          <button
+                            onClick={() => handleCancelOrder(order._id)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Huỷ đơn
+                          </button>
+                        )}
+
+                        {order.status === 'delivered' && !order.customerConfirmed && (
+                          <button
+                            onClick={() => handleConfirmReceived(order._id)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Xác nhận đã nhận
+                          </button>
+                        )}
+
+                        {order.status === 'delivered' && order.customerConfirmed && (
+                          <span className="text-sm text-green-300">Bạn đã xác nhận đã nhận</span>
+                        )}
                       </div>
                     )}
                 </div>

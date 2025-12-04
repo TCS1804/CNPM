@@ -78,3 +78,15 @@ exports.resetUserPassword = async (req, res) => {
     res.status(e.statusCode || 500).json({ error: e.message });
   }
 };
+
+// Delete user (hard delete) nếu không có transaction history
+// Chỉ dùng cho users chưa có bất kì giao dịch nào
+exports.deleteUserNoTransactions = async (req, res) => {
+  try {
+    const result = await adminService.deleteUserNoTransactions(req.params.id);
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(e.statusCode || 500).json({ error: e.message });
+  }
+};

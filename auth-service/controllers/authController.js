@@ -18,3 +18,51 @@ exports.login = async (req, res) => {
     res.status(status).json({ error: e.message || 'Unauthorized' });
   }
 };
+
+// POST /auth/forgot-password
+exports.forgotPassword = async (req, res) => {
+  try {
+    await authService.forgotPassword(req.body || {});
+    // luôn trả OK, không lộ user có tồn tại hay không
+    res.json({
+      message:
+        'If this account exists, a reset email has been sent.',
+    });
+  } catch (e) {
+    console.error('[authController] forgotPassword error:', e);
+    res
+      .status(e.statusCode || 500)
+      .json({ error: e.message || 'Internal error' });
+  }
+};
+
+// POST /auth/reset-password
+exports.resetPassword = async (req, res) => {
+  try {
+    await authService.resetPassword(req.body || {});
+    res.json({
+      message: 'Password has been reset. You can login with new password.',
+    });
+  } catch (e) {
+    console.error('[authController] resetPassword error:', e);
+    res
+      .status(e.statusCode || 500)
+      .json({ error: e.message || 'Internal error' });
+  }
+};
+
+// POST /auth/change-password (cần verifyToken + allowRoles ở route)
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    await authService.changePassword(userId, req.body || {});
+    res.json({ message: 'Password changed successfully.' });
+  } catch (e) {
+    console.error('[authController] changePassword error:', e);
+    res
+      .status(e.statusCode || 500)
+      .json({ error: e.message || 'Internal error' });
+  }
+};
+
+

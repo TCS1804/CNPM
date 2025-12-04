@@ -3,6 +3,9 @@ import React from 'react';
 import Home from './pages/Home';
 import Login from './pages/login';
 import Register from './pages/registar';
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import ChangePassword from "./pages/ChangePassword";
 import RestaurantProfile from './pages/RestaurantProfile';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminSplit from './pages/AdminSplit';
@@ -19,6 +22,7 @@ import AllOrders from './pages/AllOrders';
 import RestaurantOrders from './pages/RestaurantOrders';
 import HomeAll from './pages/HomeAll';
 import ProtectedLayout from './component/protectedLayout';
+import OrderStatusNotifier from './component/OrderStatusNotifier';
 import { CartProvider } from './CartContext';
 import CustomerProfile from "./pages/CustomerProfile";
 import DeliveryProfile from "./pages/DeliveryProfile";
@@ -30,12 +34,15 @@ import AdminDeliveries from './pages/AdminDeliveries';
 const App = () => {
   return (
     <CartProvider>
+      <OrderStatusNotifier />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
           {/* <Route path="/home" element={<HomeAll />} /> */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />  
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/split" element={<AdminSplit />} />
           <Route path="/admin/revenue" element={<AdminRevenue />} />
@@ -67,6 +74,9 @@ const App = () => {
             <Route path="/delivery-admin" element={<DeliveryAdminPanel />} />
             <Route path="/delivery/orders/all" element={<AllOrders />} />
             <Route path="/delivery/profile" element={<DeliveryProfile />} />
+          </Route>
+          <Route element={<ProtectedLayout allowedRoles={['customer', 'restaurant', 'delivery']} />}>
+            <Route path="/account/change-password" element={<ChangePassword />} />
           </Route>
         </Routes>
       </BrowserRouter>

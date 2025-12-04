@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 
 const { verifyToken, verifyTokenOrInternal, allowRoles } = require('../utils/authMiddleware');
-const mongoose = require('mongoose');
 const orderController = require('../controllers/orderController');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
@@ -295,82 +295,24 @@ router.get(
     try {
       const { id } = req.params;
       console.log('[order-service] Counting orders for restaurantId:', id);
-
+      
+      // Try both string and ObjectId formats
       let count = 0;
       try {
-        // Try as stored string first
+        // Try as string first
         count = await Order.countDocuments({ restaurantId: id });
-
-        // If nothing found and id looks like an ObjectId, try ObjectId form
-        if (count === 0 && mongoose.isValidObjectId(id)) {
-          count = await Order.countDocuments({ restaurantId: mongoose.Types.ObjectId(id) });
+        if (count === 0 && mongoose.Types.ObjectId.isValid(id)) {
+          // If no results with string, try as ObjectId
+          count = await Order.countDocuments({ restaurantId: new mongoose.Types.ObjectId(id) });
         }
       } catch (innerErr) {
-        console.error('[order-service] error counting orders (inner):', innerErr && innerErr.message ? innerErr.message : innerErr);
+        console.error('[order-service] error counting orders:', innerErr.message);
       }
-
+      
       console.log('[order-service] Found', count, 'orders for restaurantId:', id);
       res.json({ count });
     } catch (e) {
       console.error('[order-service] GET /internal/restaurant/:id/orders-count error', e);
-      res.status(500).json({ message: e.message || 'internal_error' });
-    }
-  }
-);
-
-// Internal: count orders for a customer (used by auth-service)
-router.get(
-  '/internal/customer/:id/orders-count',
-  verifyTokenOrInternal,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      console.log('[order-service] Counting orders for customerId:', id);
-
-      let count = 0;
-      try {
-        count = await Order.countDocuments({ customerId: id });
-        if (count === 0 && mongoose.isValidObjectId(id)) {
-          count = await Order.countDocuments({ customerId: mongoose.Types.ObjectId(id) });
-        }
-      } catch (innerErr) {
-        console.error('[order-service] error counting customer orders (inner):', innerErr && innerErr.message ? innerErr.message : innerErr);
-      }
-
-      console.log('[order-service] Found', count, 'orders for customerId:', id);
-      res.json({ count });
-    } catch (e) {
-      console.error('[order-service] GET /internal/customer/:id/orders-count error', e);
-      res.status(500).json({ message: e.message || 'internal_error' });
-    }
-  }
-);
-
-// Internal: count assignments/orders for a driver/delivery person
-router.get(
-  '/internal/driver/:id/assignments-count',
-  verifyTokenOrInternal,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      console.log('[order-service] Counting assignments for driverId:', id);
-
-      let count = 0;
-      try {
-        // Check both deliveryPersonId and assignedTo fields for compatibility
-        count = await Order.countDocuments({ $or: [{ deliveryPersonId: id }, { assignedTo: id }] });
-        if (count === 0 && mongoose.isValidObjectId(id)) {
-          const oid = mongoose.Types.ObjectId(id);
-          count = await Order.countDocuments({ $or: [{ deliveryPersonId: oid }, { assignedTo: oid }] });
-        }
-      } catch (innerErr) {
-        console.error('[order-service] error counting driver assignments (inner):', innerErr && innerErr.message ? innerErr.message : innerErr);
-      }
-
-      console.log('[order-service] Found', count, 'assignments for driverId:', id);
-      res.json({ count });
-    } catch (e) {
-      console.error('[order-service] GET /internal/driver/:id/assignments-count error', e);
       res.status(500).json({ message: e.message || 'internal_error' });
     }
   }

@@ -230,3 +230,131 @@ exports.resetUserPassword = async (id) => {
   };
 };
 
+/**
+ * Kiểm tra user có transaction history không
+ * - customer: có order nào không
+ * - restaurant: có order/menu nào không
+ * - delivery: có delivery nào không
+ */
+const axios = require('axios');
+const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://order-service:5003';
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || 'dev-secret';
+
+async function checkUserTransactions(userId, role) {
+  const details = {
+    orders: 0,
+    deliveries: 0,
+  };
+
+  try {
+    // For customers: ask order-service internal endpoint
+    if (role === 'customer') {
+      try {
+        const resp = await axios.get(
+          `${ORDER_SERVICE_URL}/order/internal/customer/${userId}/orders-count`,
+          { headers: { 'x-internal-secret': INTERNAL_SECRET }, timeout: 5000 }
+        );
+        details.orders = Number(resp.data?.count || 0);
+      } catch (e) {
+        console.warn('[adminService] checkUserTransactions customer:', e.message || e);
+        // fail-safe: treat as having transactions to block deletion
+        details.orders = -1;
+      }
+    }
+
+    // For delivery role: ask order-service internal driver assignments endpoint
+    if (role === 'delivery') {
+      try {
+        const resp = await axios.get(
+          `${ORDER_SERVICE_URL}/order/internal/driver/${userId}/assignments-count`,
+          { headers: { 'x-internal-secret': INTERNAL_SECRET }, timeout: 5000 }
+        );
+        details.deliveries = Number(resp.data?.count || 0);
+      } catch (e) {
+        console.warn('[adminService] checkUserTransactions delivery:', e.message || e);
+        details.deliveries = -1;
+      }
+    }
+
+    // For restaurant role (rare): reuse the customer-style internal endpoint for restaurantId check
+    if (role === 'restaurant') {
+      try {
+        const resp = await axios.get(
+          `${ORDER_SERVICE_URL}/order/internal/restaurant/${userId}/orders-count`,
+          { headers: { 'x-internal-secret': INTERNAL_SECRET }, timeout: 5000 }
+        );
+        details.orders = Number(resp.data?.count || 0);
+      } catch (e) {
+        console.warn('[adminService] checkUserTransactions restaurant:', e.message || e);
+        details.orders = -1;
+      }
+    }
+  } catch (e) {
+    console.error('[adminService] checkUserTransactions error:', e.message || e);
+  }
+
+  const hasTransactions = (details.orders > 0) || (details.deliveries > 0) || (details.orders < 0) || (details.deliveries < 0);
+  return { hasTransactions, details };
+}
+
+/**
+ * Hard delete user (không soft delete) nếu không có transaction history
+ * - Kiểm tra có profile/transaction không
+ * - Nếu sạch sẽ: xóa khỏi DB
+ * - Nếu còn giao dịch: báo lỗi
+ */
+exports.deleteUserNoTransactions = async (userId) => {
+  if (!userId) throw new Error('Missing userId');
+
+  const user = await User.findById(userId);
+  if (!user) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (user.role === 'admin') {
+    const err = new Error('Cannot delete admin users');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Kiểm tra profile
+  const [cusProfile, delProfile] = await Promise.all([
+    CustomerProfile.findOne({ userId }),
+    DeliveryProfile.findOne({ userId }),
+  ]);
+
+  // Kiểm tra giao dịch
+  const { hasTransactions, details } = await checkUserTransactions(userId, user.role);
+  if (hasTransactions) {
+    const err = new Error(
+      `User còn giao dịch: ${JSON.stringify(details)}. Không thể xóa.`
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Nếu sạch sẽ: xóa profile nếu có, rồi xóa user (hard delete)
+  try {
+    if (cusProfile) {
+      await CustomerProfile.deleteOne({ _id: cusProfile._id });
+    }
+    if (delProfile) {
+      await DeliveryProfile.deleteOne({ _id: delProfile._id });
+    }
+  } catch (e) {
+    console.warn('[adminService] failed to delete profiles before user hard delete', e.message || e);
+  }
+
+  const deleted = await User.findByIdAndDelete(userId);
+  return {
+    message: 'User deleted successfully (hard delete)',
+    deletedUser: deleted ? {
+      id: deleted._id,
+      username: deleted.username,
+      role: deleted.role,
+    } : null,
+  };
+};
+

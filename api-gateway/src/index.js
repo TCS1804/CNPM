@@ -94,6 +94,18 @@ app.use((req, _res, next) => {
   next();
 });
 
+// Ensure CORS headers and reply to preflight (OPTIONS) locally
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // If browser preflight, respond immediately
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // ---------- AUTH ----------
 app.use(
   `${PREFIX}/auth`,

@@ -164,18 +164,22 @@ const AdminUsers = () => {
   const handleDelete = async (user) => {
     if (!user?._id) return;
     const ok = window.confirm(
-      `Bạn có chắc chắn muốn xóa (soft delete) user "${user.username}"?`
+      `Bạn có chắc chắn muốn XÓA user "${user.username}" nếu user này chưa có giao dịch?\n` +
+        'Nếu user còn giao dịch, hành động sẽ bị từ chối.'
     );
     if (!ok) return;
 
     try {
       setLoading(true);
       setErr('');
-      await api.delete(`/auth/admin/users/${user._id}`);
+      // call hard-delete endpoint which only succeeds if user has no transactions
+      await api.delete(`/auth/admin/users/${user._id}/no-transactions`);
       await fetchUsers();
     } catch (e) {
       console.error(e);
-      setErr(e?.response?.data?.error || e.message);
+      // show server-provided message; if backend rejects because of transactions,
+      // display that so admin knows why it wasn't deleted.
+      setErr(e?.response?.data?.error || e.message || 'Failed to delete user');
     } finally {
       setLoading(false);
     }

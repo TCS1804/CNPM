@@ -7,5 +7,8 @@ router.post('/email', notifyController.email);
 
 // Send SMS notification
 router.post('/sms', notifyController.sms);
+// Web/browser notifications (internal)
+router.post('/web', notifyController.webPush);
+router.get('/web', notifyController.webFetch);
 
 module.exports = router;

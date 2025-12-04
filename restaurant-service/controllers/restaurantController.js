@@ -207,18 +207,118 @@ exports.adminUpdate = async (req, res) => {
 
 /**
  * DELETE /restaurant/admin/restaurants/:id
- * Thực chất là soft delete: isDeleted = true, isActive = false
+ * Hard delete restaurant if no orders exist. Audit all attempts.
  */
 exports.adminDelete = async (req, res) => {
+  const AdminAudit = require('../models/AdminAudit');
   try {
     const id = req.params.id;
+    const adminId = req.user?.id || 'unknown';
 
-    // Ở đây ta soft delete ⇒ không xóa hẳn để không làm lỗi Order / MenuItem
-    const doc = await restaurantService.softDelete(id);
-    if (!doc) return res.status(404).json({ message: 'Restaurant not found' });
+    console.log(`[restaurant-service] Admin ${adminId} requested delete for restaurant ${id}`);
 
-    res.json({ message: 'Restaurant soft-deleted', restaurant: doc });
+    // Check with order-service whether restaurant has orders
+    const axios = require('axios');
+    const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://order-service:5003';
+    const INTERNAL_SECRET = process.env.INTERNAL_SECRET || 'dev-secret';
+
+    let orderCount = 0;
+    let blockReason = null;
+
+    try {
+      const resp = await axios.get(
+        `${ORDER_SERVICE_URL}/order/internal/restaurant/${id}/orders-count`,
+        { headers: { 'x-internal-secret': INTERNAL_SECRET }, timeout: 5000 }
+      );
+      orderCount = resp.data?.count || 0;
+      console.log(`[restaurant-service] Restaurant ${id} has ${orderCount} orders`);
+
+      if (orderCount > 0) {
+        blockReason = `has ${orderCount} orders`;
+        console.log(`[restaurant-service] Deletion blocked for restaurant ${id} due to ${orderCount} orders`);
+        
+        // Log audit
+        try {
+          await AdminAudit.create({
+            adminId,
+            action: 'delete_attempt',
+            targetType: 'restaurant',
+            targetId: id,
+            status: 'blocked',
+            reason: blockReason,
+            responseMessage: 'Cannot delete restaurant: there are existing orders for this restaurant',
+          });
+        } catch (auditErr) {
+          console.warn('[restaurant-service] failed to log audit for blocked delete', auditErr.message || auditErr);
+        }
+
+        return res.status(400).json({ message: 'Cannot delete restaurant: there are existing orders for this restaurant' });
+      }
+    } catch (e) {
+      // If order-service unreachable, be conservative and block deletion
+      blockReason = 'Failed to verify orders with order-service';
+      console.error('[restaurant-service] failed to verify orders before delete:', e.message || e);
+      console.error('[restaurant-service] attempted URL:', `${ORDER_SERVICE_URL}/order/internal/restaurant/${id}/orders-count`);
+      
+      // Log audit
+      try {
+        await AdminAudit.create({
+          adminId,
+          action: 'delete_attempt',
+          targetType: 'restaurant',
+          targetId: id,
+          status: 'blocked',
+          reason: blockReason,
+          responseMessage: 'Failed to verify restaurant orders. Try again later.',
+        });
+      } catch (auditErr) {
+        console.warn('[restaurant-service] failed to log audit for failed verification', auditErr.message || auditErr);
+      }
+
+      return res.status(500).json({ message: 'Failed to verify restaurant orders. Try again later.' });
+    }
+
+    // No orders -> perform hard delete of restaurant and related menu items
+    const doc = await restaurantService.hardDelete(id);
+    if (!doc) {
+      // Log audit
+      try {
+        await AdminAudit.create({
+          adminId,
+          action: 'delete_attempt',
+          targetType: 'restaurant',
+          targetId: id,
+          status: 'error',
+          reason: 'Restaurant not found',
+          responseMessage: 'Restaurant not found',
+        });
+      } catch (auditErr) {
+        console.warn('[restaurant-service] failed to log audit for not found', auditErr.message || auditErr);
+      }
+
+      return res.status(404).json({ message: 'Restaurant not found' });
+    }
+
+    console.log(`[restaurant-service] Admin ${adminId} hard deleted restaurant ${id}`);
+    
+    // Log successful deletion to audit
+    try {
+      await AdminAudit.create({
+        adminId,
+        action: 'delete_attempt',
+        targetType: 'restaurant',
+        targetId: id,
+        status: 'success',
+        reason: null,
+        responseMessage: 'Restaurant deleted successfully (hard delete)',
+      });
+    } catch (auditErr) {
+      console.warn('[restaurant-service] failed to log audit for successful delete', auditErr.message || auditErr);
+    }
+
+    res.json({ message: 'Restaurant deleted (hard delete)', restaurant: doc });
   } catch (e) {
+    console.error('[restaurant-service] adminDelete error', e.message || e);
     res.status(400).json({ message: e.message });
   }
 };

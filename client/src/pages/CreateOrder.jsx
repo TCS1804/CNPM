@@ -72,10 +72,21 @@ const CheckoutForm = ({ onSuccess, onError, setLoading, selectedPaymentMethod, b
       }
   
       const { error, paymentIntent } = result;
-  
+
+      // Handle case where Stripe reports the PaymentIntent already succeeded
       if (error) {
-        setPaymentError(error.message);
-        onError(error);
+        // Some Stripe errors include the payment_intent object (e.g. payment_intent_unexpected_state)
+        if (
+          error?.code === 'payment_intent_unexpected_state' &&
+          error?.payment_intent?.id &&
+          error?.payment_intent?.status === 'succeeded'
+        ) {
+          console.warn('Stripe: payment_intent already succeeded, treating as success', error.payment_intent.id);
+          onSuccess(error.payment_intent.id);
+        } else {
+          setPaymentError(error.message);
+          onError(error);
+        }
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         onSuccess(paymentIntent.id);
       } else {

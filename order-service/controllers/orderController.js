@@ -1,22 +1,23 @@
 const orderService = require('../services/orderService');
 const partnerService = require('../services/partnerService');
 const Order = require('../models/Order');
-const { sendEmail } = require('../services/notificationClient');
+const { sendEmail, sendWeb } = require('../services/notificationClient');
 const { fetchDeliveryProfile } = require('../services/profileClient');
 const { fetchRestaurants } = require('../services/partnerService');
 const axios = require('axios');
 
 // Base URL tới restaurant-service.
-// Bạn có thể set env RESTAURANT_SERVICE_URL = 'http://restaurant-service:5002'
-// hoặc 'http://localhost:4002' tùy môi trường.
+// Nhiều repo dùng tên biến khác nhau; hỗ trợ cả `RESTAURANT_SERVICE_URL` và `RESTAURANT_BASE_URL`.
+// Trong docker-compose local, `RESTAURANT_BASE_URL` thường đặt là 'http://restaurant-service:5002'.
 const RAW_RESTAURANT_URL =
-  process.env.RESTAURANT_SERVICE_URL || 'http://localhost:4002';
+  process.env.RESTAURANT_SERVICE_URL || process.env.RESTAURANT_BASE_URL || 'http://localhost:4002';
 
 // Đảm bảo base đã có hậu tố /restaurant để match với app.use('/restaurant', ...)
 let RESTAURANT_BASE = RAW_RESTAURANT_URL.replace(/\/+$/, '');
 if (!/\/restaurant$/.test(RESTAURANT_BASE)) {
   RESTAURANT_BASE += '/restaurant';
 }
+console.log('[order-service] Using RESTAURANT_BASE =', RESTAURANT_BASE);
 
 // Danh sách nhà hàng (proxy sang restaurant-service)
 exports.listRestaurants = async (req, res) => {
@@ -105,6 +106,16 @@ exports.createOrder = async (req, res) => {
     }
     const userId = req.user?.id || req.user?._id;
     const doc = await orderService.create(userId, req.body);
+    // Notify restaurant (web/browser) about new order
+    try {
+      sendWeb({
+        target: { role: 'restaurant', restaurantId: restaurant._id },
+        title: 'Đơn hàng mới',
+        body: `Bạn có đơn hàng mới #${doc._id?.toString().slice(-6) || ''}`,
+        data: { orderId: doc._id },
+      });
+    } catch (e) {}
+
     res.status(201).json(doc);
   } catch (e) {
     console.error('createOrder error:', e);
@@ -158,6 +169,29 @@ exports.updateStatus = async (req, res) => {
           text,
         });
       }
+
+    // Notify parties based on status
+    try {
+      if (doc.status === 'accepted') {
+        // Notify customer that restaurant accepted
+        sendWeb({
+          target: { userId: doc.customerId },
+          title: 'Nhà hàng đã chấp nhận đơn',
+          body: `Nhà hàng đã chấp nhận đơn #${doc._id?.toString().slice(-6) || ''}`,
+          data: { orderId: doc._id },
+        });
+
+        // Notify delivery roles there's a new order available
+        sendWeb({
+          target: { role: 'delivery' },
+          title: 'Có đơn hàng mới cần giao',
+          body: `Đơn #${doc._id?.toString().slice(-6) || ''} cần giao.`,
+          data: { orderId: doc._id },
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to send web notifications for status update', e?.message || e);
+    }
     }
 
     res.json(doc);
@@ -243,6 +277,16 @@ exports.assignToDriver = async (req, res) => {
       });
     }
 
+    // Notify customer that driver has accepted the order
+    try {
+      sendWeb({
+        target: { userId: order.customerId },
+        title: 'Người giao đã nhận đơn',
+        body: `Đơn #${order._id?.toString().slice(-6) || ''} đã được nhận để giao.`,
+        data: { orderId: order._id },
+      });
+    } catch (e) {}
+
     res.json(order);
   } catch (e) {
     res
@@ -278,6 +322,16 @@ exports.markDelivered = async (req, res) => {
       });
     }
 
+    // Notify customer that order has been delivered
+    try {
+      sendWeb({
+        target: { userId: order.customerId },
+        title: 'Đơn hàng đã được giao',
+        body: `Đơn #${order._id?.toString().slice(-6) || ''} đã được giao thành công.`,
+        data: { orderId: order._id },
+      });
+    } catch (e) {}
+
     res.json(order);
   } catch (e) {
     res
@@ -306,6 +360,47 @@ exports.cancelOrder = async (req, res) => {
     res.json(doc);
   } catch (e) {
     res.status(400).json({ message: e.message });
+  }
+};
+
+// Customer confirms they received the order
+exports.confirmReceived = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const customerId = req.user?.id || req.user?._id;
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (String(order.customerId) !== String(customerId)) {
+      return res.status(403).json({ message: 'You are not the owner of this order' });
+    }
+
+    if (order.status !== 'delivered') {
+      return res.status(400).json({ message: 'Order is not in delivered state' });
+    }
+
+    if (order.customerConfirmed) {
+      return res.status(400).json({ message: 'Order already confirmed' });
+    }
+
+    order.customerConfirmed = true;
+    order.receivedAt = new Date();
+    await order.save();
+
+    // Optional: notify restaurant/admin about confirmation
+    if (order.customerContact?.email) {
+      await sendEmail({
+        to: order.customerContact.email,
+        subject: `Cám ơn bạn — đã nhận đơn hàng ${order._id}`,
+        text: `Cám ơn bạn đã xác nhận đã nhận đơn hàng ${order._id}.`,
+      }).catch(() => {});
+    }
+
+    res.json(order);
+  } catch (e) {
+    console.error('confirmReceived error', e);
+    res.status(400).json({ message: e.message || 'Failed to confirm received' });
   }
 };
 

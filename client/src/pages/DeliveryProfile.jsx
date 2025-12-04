@@ -42,7 +42,11 @@ const DeliveryProfile = () => {
         vehicleType,
         note,
       });
-      alert("Lưu thông tin shipper thành công");
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Profile', { body: 'Lưu thông tin shipper thành công' });
+      } else {
+        alert('Lưu thông tin shipper thành công');
+      }
     } catch (e) {
       setError(e.response?.data?.message || "Lỗi lưu thông tin");
     } finally {
@@ -123,6 +127,14 @@ const DeliveryProfile = () => {
               }`}
             >
               {loading ? "Đang lưu..." : "Lưu thông tin"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/account/change-password")}
+              className="w-full mt-3 py-2 px-4 rounded font-medium bg-gray-700 text-white hover:bg-gray-600 transition"
+            >
+              Đổi mật khẩu
             </button>
           </form>
         </div>

@@ -2,11 +2,35 @@
 import React, { useEffect, useRef } from 'react';
 import api from '../lib/axios';
 
+// Lightweight JWT decode helper (only decodes payload, avoids adding dependency)
+const decodeJwt = (token) => {
+  try {
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(payload)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+};
+
 const ORDER_BASE = import.meta.env.VITE_ORDER_BASE_URL || '/orders';
 
 /**
  * Component chạy nền:
- * - Định kỳ fetch danh sách đơn của customer
+ * - Phát hiện role của user từ token (customer, restaurant, delivery, admin)
+ * - Định kỳ fetch danh sách đơn phù hợp với role:
+ *   - customer: /orders/customer/orders
+ *   - restaurant: /orders/restaurant/orders (hoặc list with restaurantId filter)
+ *   - delivery: /orders/driver/orders
+ *   - admin: /orders/admin/list (tất cả đơn)
  * - So sánh trạng thái mới và cũ
  * - Nếu khác -> hiện Notification (hoặc window.alert)
  */
@@ -14,6 +38,7 @@ const OrderStatusNotifier = () => {
   const lastStatusesRef = useRef({});
   const initializedRef = useRef(false);
   const timerRef = useRef(null);
+  const userRoleRef = useRef(null);
 
   // Map status -> tiếng Việt dễ hiểu
   const humanStatus = (status) => {
@@ -30,6 +55,35 @@ const OrderStatusNotifier = () => {
         return 'đã bị huỷ';
       default:
         return status;
+    }
+  };
+
+  // Xác định role từ JWT token
+  const getUserRole = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      const decoded = decodeJwt(token);
+      return decoded?.role || null;
+    } catch (e) {
+      console.warn('Failed to decode token:', e);
+      return null;
+    }
+  };
+
+  // Xác định endpoint dựa trên role
+  const getOrdersEndpoint = (role) => {
+    switch (role) {
+      case 'customer':
+        return `${ORDER_BASE}/customer/orders`;
+      case 'restaurant':
+        return `${ORDER_BASE}/restaurant`;
+      case 'delivery':
+        return `${ORDER_BASE}/driver/orders`;
+      case 'admin':
+        return `${ORDER_BASE}/admin/list`;
+      default:
+        return null;
     }
   };
 
@@ -89,8 +143,21 @@ const OrderStatusNotifier = () => {
         const token = localStorage.getItem('token');
         if (!token) return; // Chưa login thì thôi
 
-        const res = await api.get(`${ORDER_BASE}/customer/orders`);
-        const orders = Array.isArray(res.data) ? res.data : [];
+        // Xác định role nếu chưa biết
+        if (!userRoleRef.current) {
+          userRoleRef.current = getUserRole();
+          if (!userRoleRef.current) return;
+        }
+
+        // Lấy endpoint theo role
+        const endpoint = getOrdersEndpoint(userRoleRef.current);
+        if (!endpoint) return;
+
+        const res = await api.get(endpoint);
+        
+        // Xử lý response tuỳ endpoint (admin trả về { data: [...], pagination: {...} })
+        let orders = Array.isArray(res.data) ? res.data : res.data?.data || [];
+        orders = Array.isArray(orders) ? orders : [];
 
         // Nếu đây là lần đầu (không có status cũ) thì chỉ khởi tạo, không bắn notification
         if (!initializedRef.current || Object.keys(lastStatusesRef.current).length === 0) {
@@ -133,11 +200,58 @@ const OrderStatusNotifier = () => {
       }
     };
 
+    // Poll web notifications endpoint and show any returned notifications
+    const pollWebNotifications = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const role = getUserRole();
+        // Poll role notifications
+        if (role) {
+          const res = await api.get(`/notify/web?role=${role}`);
+          const items = Array.isArray(res.data) ? res.data : [];
+          items.forEach((n) => {
+            if (typeof window !== 'undefined') {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(n.title || 'Thông báo', { body: n.body || '' });
+              } else {
+                // Fallback small alert
+                try { window.alert(`${n.title}\n${n.body}`); } catch(e) {}
+              }
+            }
+          });
+        }
+
+        // Poll user-specific notifications
+        const decoded = decodeJwt(localStorage.getItem('token'));
+        const userId = decoded?.id || decoded?._id;
+        if (userId) {
+          const res2 = await api.get(`/notify/web?userId=${userId}`);
+          const items2 = Array.isArray(res2.data) ? res2.data : [];
+          items2.forEach((n) => {
+            if (typeof window !== 'undefined') {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(n.title || 'Thông báo', { body: n.body || '' });
+              } else {
+                try { window.alert(`${n.title}\n${n.body}`); } catch(e) {}
+              }
+            }
+          });
+        }
+      } catch (e) {
+        // ignore polling errors
+      }
+    };
+
     // Gọi lần đầu
     fetchAndCompare();
+    pollWebNotifications();
 
-    // Polling mỗi 10 giây (tuỳ bạn chỉnh 5–30s tuỳ nhu cầu)
-    timerRef.current = setInterval(fetchAndCompare, 10000);
+    // Polling mỗi 8 giây cho orders + web notifications
+    timerRef.current = setInterval(() => {
+      fetchAndCompare();
+      pollWebNotifications();
+    }, 8000);
 
     return () => {
       if (timerRef.current) {

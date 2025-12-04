@@ -51,7 +51,12 @@ const CustomerProfile = () => {
           lng: lng ? Number(lng) : undefined,
         },
       });
-      alert("Lưu thông tin khách hàng thành công");
+      // Show web notification or fallback alert
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Profile', { body: 'Lưu thông tin khách hàng thành công' });
+      } else {
+        alert('Lưu thông tin khách hàng thành công');
+      }
     } catch (e) {
       setError(e.response?.data?.message || "Lỗi lưu thông tin");
     } finally {
@@ -155,6 +160,14 @@ const CustomerProfile = () => {
               }`}
             >
               {loading ? "Đang lưu..." : "Lưu thông tin"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/account/change-password")}
+              className="w-full py-3 px-4 rounded font-medium bg-gray-700 text-white hover:bg-gray-600 transition duration-200"
+            >
+              Đổi mật khẩu
             </button>
           </form>
         </div>

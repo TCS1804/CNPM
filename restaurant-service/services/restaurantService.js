@@ -96,3 +96,18 @@ exports.setActive = (id, isActive) =>
     { isActive },
     { new: true }
   );
+
+// Hard delete restaurant and related menu items (used when safe to remove)
+exports.hardDelete = async (id) => {
+  const MenuItem = require('../models/MenuItem');
+  const doc = await Restaurant.findByIdAndDelete(id);
+  if (!doc) return null;
+  try {
+    await MenuItem.deleteMany({ restaurantId: String(id) });
+  } catch (e) {
+    // log and continue
+    console.warn('[restaurant-service] failed to delete related menu items', e.message || e);
+  }
+  console.log(`[restaurant-service] hardDelete completed for restaurant ${id}`);
+  return doc;
+};
