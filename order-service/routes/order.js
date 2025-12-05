@@ -118,6 +118,14 @@ router.post(
   orderController.assignToDriver
 );
 
+// 🚁 Assign drone cho đơn hàng
+router.post(
+  '/:orderId/assign-drone',
+  verifyToken,
+  allowRoles('restaurant', 'admin'),
+  orderController.assignToDrone
+);
+
 router.post(
   '/:orderId/complete',
   verifyToken,

@@ -19,6 +19,10 @@ if (!/\/restaurant$/.test(RESTAURANT_BASE)) {
 }
 console.log('[order-service] Using RESTAURANT_BASE =', RESTAURANT_BASE);
 
+// Drone service URL
+const DRONE_SERVICE_URL = 
+  process.env.DRONE_SERVICE_URL || 'http://drone-service:5055';
+
 // Danh sách nhà hàng (proxy sang restaurant-service)
 exports.listRestaurants = async (req, res) => {
   try {
@@ -292,6 +296,73 @@ exports.assignToDriver = async (req, res) => {
     res
       .status(400)
       .json({ message: e.message || 'Failed to assign order' });
+  }
+};
+
+// 🚁 Assign drone cho đơn hàng
+// body: { restaurantLocation: {lat,lng} }
+exports.assignToDrone = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { restaurantLocation } = req.body || {};
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (order.delivery?.missionId) {
+      return res.status(400).json({ message: 'Drone already assigned' });
+    }
+
+    if (!order.location?.coordinates) {
+      return res.status(400).json({ message: 'Customer location not found' });
+    }
+
+    if (!restaurantLocation) {
+      return res.status(400).json({ message: 'restaurantLocation is required' });
+    }
+
+    // Gọi drone-service để assign drone
+    const droneResponse = await axios.post(`${DRONE_SERVICE_URL}/api/drone/assign`, {
+      orderId: order._id.toString(),
+      customerId: order.customerId, // 🎯 Gửi customerId
+      restaurant: restaurantLocation,
+      customer: {
+        lat: order.location.coordinates.lat,
+        lng: order.location.coordinates.lng,
+      },
+    });
+
+    // Cập nhật order với mission info
+    order.delivery = {
+      mode: 'drone',
+      missionId: droneResponse.data.missionId,
+    };
+    order.status = 'in-transit';
+    await order.save();
+
+    // Notify customer about drone delivery
+    try {
+      sendWeb({
+        target: { userId: order.customerId },
+        title: 'Drone đang giao đơn',
+        body: `Đơn #${order._id?.toString().slice(-6) || ''} đang được drone giao. Quãng đường: ${droneResponse.data.distanceKm.toFixed(1)}km, ETA: ${droneResponse.data.etaSeconds}s.`,
+        data: { orderId: order._id, missionId: droneResponse.data.missionId },
+      });
+    } catch (e) {
+      console.warn('[order-service] Failed to notify customer about drone:', e.message);
+    }
+
+    res.json({
+      message: 'Drone assigned successfully',
+      order,
+      drone: droneResponse.data,
+    });
+  } catch (err) {
+    console.error('[order-service] assignToDrone error:', err);
+    res.status(400).json({
+      message: err.message || 'Failed to assign drone',
+      detail: err.response?.data || err.message,
+    });
   }
 };
 

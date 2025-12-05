@@ -17,6 +17,9 @@ const DroneSimulationMap = ({
   const mapRef = useRef(null);
   const droneMarkerRef = useRef(null);
   const wsRef = useRef(null); // 🔥 WebSocket tới drone-service
+  const [droneProgress, setDroneProgress] = React.useState(0); // 0-100%
+  const [miletonesNotified, setMilestonesNotified] = React.useState({});
+  const progressOverlayRef = useRef(null);
 
   const accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
@@ -144,10 +147,22 @@ const DroneSimulationMap = ({
           if (droneMarkerRef.current) {
             droneMarkerRef.current.setLngLat([lng, lat]);
           }
+          
+          // 🎯 Update tiến độ từ WebSocket
+          if (data.progress !== undefined) {
+            const percent = Math.round(data.progress * 100);
+            setDroneProgress(percent);
+            
+            // Cập nhật milestone notifications
+            if (data.milestonesNotified) {
+              setMilestonesNotified(data.milestonesNotified);
+            }
+          }
         }
 
         if (data.type === "completed") {
           console.log("[Drone WS] completed order", orderId);
+          setDroneProgress(100);
         }
       } catch (e) {
         console.error("[Drone WS] parse error", e);
@@ -181,9 +196,14 @@ const DroneSimulationMap = ({
 
   if (!isOpen) return null;
 
+  // Xác định milestone status
+  const milestone1Reached = miletonesNotified?.['1/3'];
+  const milestone2Reached = miletonesNotified?.['2/3'];
+  const isCompleted = droneProgress >= 100;
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl h-[480px] flex flex-col">
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl h-[550px] flex flex-col">
         <div className="flex justify-between items-center px-4 py-2 border-b border-gray-700">
           <h2 className="text-lg font-bold text-white">
             Drone Delivery – Order #{orderId}
@@ -195,6 +215,93 @@ const DroneSimulationMap = ({
             Đóng
           </button>
         </div>
+        
+        {/* 🎯 Progress Bar & Milestone Info */}
+        <div className="px-4 py-3 bg-gray-800 border-b border-gray-700">
+          <div className="mb-2">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-white text-sm font-semibold">
+                Tiến độ giao hàng
+              </span>
+              <span className="text-orange-400 font-bold text-lg">
+                {droneProgress}%
+              </span>
+            </div>
+            
+            {/* Progress bar */}
+            <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-orange-400 to-orange-600 h-full rounded-full transition-all duration-300"
+                style={{ width: `${droneProgress}%` }}
+              />
+            </div>
+          </div>
+          
+          {/* Milestone markers */}
+          <div className="flex justify-between text-xs mt-2 px-1">
+            {/* 1/3 Milestone */}
+            <div className="flex flex-col items-center">
+              <span
+                className={`inline-block w-3 h-3 rounded-full mb-1 ${
+                  milestone1Reached
+                    ? 'bg-green-500 shadow-lg shadow-green-500/50'
+                    : 'bg-gray-500'
+                }`}
+              />
+              <span
+                className={
+                  milestone1Reached ? 'text-green-400 font-semibold' : 'text-gray-400'
+                }
+              >
+                1/3
+              </span>
+              {milestone1Reached && (
+                <span className="text-green-400 text-xs">✓ Đã đi</span>
+              )}
+            </div>
+
+            {/* 2/3 Milestone */}
+            <div className="flex flex-col items-center">
+              <span
+                className={`inline-block w-3 h-3 rounded-full mb-1 ${
+                  milestone2Reached
+                    ? 'bg-green-500 shadow-lg shadow-green-500/50'
+                    : 'bg-gray-500'
+                }`}
+              />
+              <span
+                className={
+                  milestone2Reached ? 'text-green-400 font-semibold' : 'text-gray-400'
+                }
+              >
+                2/3
+              </span>
+              {milestone2Reached && (
+                <span className="text-green-400 text-xs">✓ Đã đi</span>
+              )}
+            </div>
+
+            {/* Completed */}
+            <div className="flex flex-col items-center">
+              <span
+                className={`inline-block w-3 h-3 rounded-full mb-1 ${
+                  isCompleted
+                    ? 'bg-blue-500 shadow-lg shadow-blue-500/50'
+                    : 'bg-gray-500'
+                }`}
+              />
+              <span
+                className={isCompleted ? 'text-blue-400 font-semibold' : 'text-gray-400'}
+              >
+                Hoàn tất
+              </span>
+              {isCompleted && (
+                <span className="text-blue-400 text-xs">🎉 Done</span>
+              )}
+            </div>
+          </div>
+        </div>
+        
         <div className="flex-1">
           <div ref={mapContainerRef} className="w-full h-full" />
         </div>

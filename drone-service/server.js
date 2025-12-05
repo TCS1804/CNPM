@@ -25,6 +25,8 @@ const MONGO_URI =
   process.env.MONGO_URI || 'mongodb://mongo:27017/dronedb';
 const ORDER_SERVICE_URL =
   process.env.ORDER_SERVICE_URL || 'http://api-gateway:5020/api/orders';
+const NOTIFICATION_SERVICE_URL =
+  process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:5006';
   
 app.use(cors());
 app.use(express.json());
@@ -47,6 +49,9 @@ const dronesState = new Map();
 
 // orderId -> Set<WebSocket>
 const wsClientsByOrder = new Map();
+
+// orderId -> { milestone1/3, milestone2/3 } (để track xem đã gửi thông báo chưa)
+const milestonesNotified = new Map();
 
 // ================== Helper functions ==================
 
@@ -124,7 +129,37 @@ function computeDroneState(orderId) {
     state.completedAt = now;
   }
 
+  // 🎯 Check milestone notifications (1/3, 2/3 quãng đường)
+  checkAndSendMilestones(orderId, progress, state);
+
   return computed;
+}
+
+// Kiểm tra và gửi thông báo milestone
+function checkAndSendMilestones(orderId, progress, state) {
+  const milestones = milestonesNotified.get(orderId) || {};
+  
+  // Milestone 1/3 (33%)
+  if (progress >= 0.33 && !milestones['1/3']) {
+    milestones['1/3'] = true;
+    milestonesNotified.set(orderId, milestones);
+    
+    const message = `Đơn hàng của bạn đang trên đường giao (33% hoàn thành) 🚁`;
+    sendDeliveryNotification(orderId, state.customerId, message, 'delivery_1/3');
+    
+    console.log(`[drone-service] Milestone 1/3 reached for order ${orderId}`);
+  }
+  
+  // Milestone 2/3 (67%)
+  if (progress >= 0.67 && !milestones['2/3']) {
+    milestones['2/3'] = true;
+    milestonesNotified.set(orderId, milestones);
+    
+    const message = `Đơn hàng của bạn sắp tới (67% hoàn thành) 📍`;
+    sendDeliveryNotification(orderId, state.customerId, message, 'delivery_2/3');
+    
+    console.log(`[drone-service] Milestone 2/3 reached for order ${orderId}`);
+  }
 }
 
 function broadcastToOrder(orderId, payload) {
@@ -136,6 +171,32 @@ function broadcastToOrder(orderId, payload) {
     if (ws.readyState === ws.OPEN) {
       ws.send(data);
     }
+  }
+}
+
+// Gửi thông báo đến customer qua notification-service
+async function sendDeliveryNotification(orderId, customerId, message, type = 'delivery_progress') {
+  try {
+    await axios.post(`${NOTIFICATION_SERVICE_URL}/notify/send`, {
+      userId: customerId,
+      title: 'Đơn hàng đang giao',
+      message,
+      type,
+      orderId,
+      webNotification: {
+        title: 'Đơn hàng đang giao',
+        body: message,
+        icon: '/delivery-icon.png',
+        badge: '/badge-icon.png',
+        tag: `delivery-${orderId}`,
+      },
+    });
+    console.log(`[drone-service] Notification sent: ${message} for order ${orderId}`);
+  } catch (err) {
+    console.warn(
+      '[drone-service] Failed to send notification:',
+      err.response?.data || err.message
+    );
   }
 }
 
@@ -422,10 +483,10 @@ app.delete('/api/drone/missions/:id', async (req, res) => {
 // ================== Simulation Assign (tạo mission từ order) ==================
 
 // assign mission cho drone (simulation)
-// body: { orderId, restaurant: {lat,lng}, customer: {lat,lng} }
+// body: { orderId, restaurant: {lat,lng}, customer: {lat,lng}, customerId }
 app.post('/api/drone/assign', async (req, res) => {
   try {
-    const { orderId, restaurant, customer } = req.body || {};
+    const { orderId, restaurant, customer, customerId } = req.body || {};
 
     if (!orderId || !restaurant || !customer) {
       return res.status(400).json({
@@ -495,6 +556,7 @@ app.post('/api/drone/assign', async (req, res) => {
       droneCode: drone.code,
       missionId: mission._id.toString(),
       orderId,
+      customerId, // 🎯 Lưu customerId để gửi notification
       restaurant,
       customer,
       distanceKm,
@@ -624,6 +686,29 @@ app.post('/api/drone/:orderId/cancel', async (req, res) => {
   res.json({ ok: true, orderId, status: state.status });
 });
 
+// 📍 Progress tracking endpoint - để client polling progress
+app.get('/api/drone/:orderId/progress', (req, res) => {
+  const { orderId } = req.params;
+  const state = computeDroneState(orderId);
+  
+  if (!state) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+
+  res.json({
+    orderId: state.orderId,
+    missionId: state.missionId,
+    status: state.status,
+    progress: state.progress, // 0-1
+    progressPercent: Math.round(state.progress * 100), // 0-100
+    position: state.position,
+    battery: state.battery,
+    etaSeconds: state.etaSeconds,
+    distanceKm: state.distanceKm,
+    milestonesNotified: milestonesNotified.get(orderId) || {},
+  });
+});
+
 // ================== HTTP + WebSocket server ==================
 
 const server = http.createServer(app);
@@ -667,6 +752,7 @@ wss.on('connection', (ws, req) => {
           position: state.position,
           progress: state.progress,
           etaSeconds: state.etaSeconds,
+          milestonesNotified: milestonesNotified.get(orderId) || {}, // 🎯 Gửi milestone status
         })
       );
     } else {
@@ -711,6 +797,7 @@ setInterval(() => {
         position: computed.position,
         progress: computed.progress,
         etaSeconds: computed.etaSeconds,
+        milestonesNotified: milestonesNotified.get(orderId) || {}, // 🎯 Gửi milestone status
       });
 
       if (computed.status === 'delivered') {
